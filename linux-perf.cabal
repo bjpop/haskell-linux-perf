@@ -9,7 +9,7 @@ Maintainer:          Simon Marlow <marlowsd@gmail.com>
 Stability:           Experimental
 category:            Development, GHC, Debug, Profiling, Trace
 Build-type:          Simple
-Cabal-version:       >=1.6
+Cabal-version:       >=1.8
 
 Library
   -- Modules exported by the library.
@@ -35,4 +35,6 @@ Library
 Executable dump-perf {
   Main-is: dump-perf.hs
   hs-source-dirs: dump-perf
+  Build-depends: linux-perf==0.1,
+                 base==4.*
 }
