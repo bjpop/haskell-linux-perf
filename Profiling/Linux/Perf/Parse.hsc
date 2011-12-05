@@ -33,12 +33,12 @@ getU64 = lift getWord64le
 
 -- -----------------------------------------------------------------------------
 
-data PerfFileSection 
+data PerfFileSection
   = PerfFileSection { sec_offset :: Word64,
                       sec_size   :: Word64 }
 
 data PerfFileHeader
-  = PerfFileHeader { 
+  = PerfFileHeader {
                  fh_size          :: Word64,    -- Size of (this) header
                  fh_attr_size     :: Word64,    -- Size of one attribute section
                  fh_attrs_offset  :: Word64,
@@ -66,7 +66,7 @@ readFileHeader = do
     when (magic /= pERF_MAGIC) $
         throwError "incompatible file format, or not a perf file"
     fh_size        <- getU64
-    fh_attr_size   <- getU64    
+    fh_attr_size   <- getU64
     PerfFileSection fh_attrs_offset fh_attrs_size  <- readFileSection
     PerfFileSection fh_data_offset  fh_data_size   <- readFileSection
     PerfFileSection fh_event_offset fh_event_size  <- readFileSection
@@ -113,9 +113,9 @@ readEventsFromFile f = do
     printf "size struct perf_file_attr: %d\n" ((#size struct perf_file_attr) :: Int)
     hSeek h AbsoluteSeek (fromIntegral (fh_attrs_offset fh))
     b <- hGet h (fromIntegral (fh_attrs_size fh))
-    attrs <- case runGet (runErrorT $ replicateM (fromIntegral nr_attrs) 
+    attrs <- case runGet (runErrorT $ replicateM (fromIntegral nr_attrs)
                                                  parseAttr) b of
                Left err -> fail err
                Right r  -> return r
-    
+
     return (fh, attrs)
