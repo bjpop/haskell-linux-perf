@@ -39,8 +39,8 @@ data PerfFileSection
 
 data PerfFileHeader
   = PerfFileHeader { 
-                 fh_size          :: Word64,
-                 fh_attr_size     :: Word64,
+                 fh_size          :: Word64,    -- Size of (this) header
+                 fh_attr_size     :: Word64,    -- Size of one attribute section
                  fh_attrs_offset  :: Word64,
                  fh_attrs_size    :: Word64,
                  fh_data_offset   :: Word64,
