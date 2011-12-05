@@ -74,18 +74,19 @@ readFileHeader = do
     return PerfFileHeader{..}
 
 data PerfFileAttr = PerfFileAttr {
-    fa_attr :: [Word8], -- for now
+    fa_attr :: [Word8], -- for now, XXX should be perf_event_attr
     fa_ids_offset :: Word64,
     fa_ids_size   :: Word64
   }
 
 parseAttr :: GetEvents PerfFileAttr
 parseAttr = do
+  -- XXX should read many perf_event_attrs here, not just bytes
   fa_attr <- replicateM (#size struct perf_event_attr) getE
-  trace (show fa_attr) $ return ()
+  -- trace (show fa_attr) $ return ()
   PerfFileSection fa_ids_offset fa_ids_size <- readFileSection
-  trace (show fa_ids_offset) $ return ()
-  trace (show fa_ids_size) $ return ()
+  -- trace (show fa_ids_offset) $ return ()
+  -- trace (show fa_ids_size) $ return ()
   return PerfFileAttr{..}
 
 readEventsFromFile :: FilePath -> IO (PerfFileHeader, [PerfFileAttr])
@@ -107,6 +108,8 @@ readEventsFromFile f = do
     printf "fh_event_size    = %d\n" $ fh_event_size fh
     printf "fh_adds_features = %s\n" $ (show (fh_adds_features fh))
 
+    -- I wonder if this calculation should be:
+    -- fh_attrs_size fh `quot` fh_attr_size fh ?
     let nr_attrs = fh_attrs_size fh `quot` (#size struct perf_file_attr)
     printf "nr_attrs = %d\n" nr_attrs
 
