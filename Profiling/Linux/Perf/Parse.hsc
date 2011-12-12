@@ -33,6 +33,15 @@ getU32 = lift getWord32le
 getU64 :: GetEvents Word64
 getU64 = lift getWord64le
 
+runGetEvents :: GetEvents a -> B.ByteString -> Either String a
+runGetEvents g = runGet (runErrorT g)
+
+runGetEventsCheck  :: GetEvents a -> B.ByteString -> IO a
+runGetEventsCheck g b =
+   case runGetEvents g b of
+      Left e -> fail e
+      Right v -> return v
+
 -- -----------------------------------------------------------------------------
 
 -- Corresponds with the perf_file_section struct in <perf source>/util/header.h
@@ -57,22 +66,22 @@ data PerfFileHeader
 pERF_MAGIC = 0x454c494646524550 :: Word64 -- "PERFMAGIC", actually I think "PERFFILE"
 hEADER_FEAT_BITS = (#const HEADER_FEAT_BITS) :: Int
 
-readFileSection :: GetEvents PerfFileSection
-readFileSection = do
+parseFileSection :: GetEvents PerfFileSection
+parseFileSection = do
     sec_offset <- getU64
     sec_size   <- getU64
     return PerfFileSection{..}
 
-readFileHeader :: GetEvents PerfFileHeader
-readFileHeader = do
+parseFileHeader :: GetEvents PerfFileHeader
+parseFileHeader = do
     magic       <- getU64
     when (magic /= pERF_MAGIC) $
         throwError "incompatible file format, or not a perf file"
     fh_size        <- getU64
     fh_attr_size   <- getU64
-    PerfFileSection fh_attrs_offset fh_attrs_size  <- readFileSection
-    PerfFileSection fh_data_offset  fh_data_size   <- readFileSection
-    PerfFileSection fh_event_offset fh_event_size  <- readFileSection
+    PerfFileSection fh_attrs_offset fh_attrs_size  <- parseFileSection
+    PerfFileSection fh_data_offset  fh_data_size   <- parseFileSection
+    PerfFileSection fh_event_offset fh_event_size  <- parseFileSection
     fh_adds_features <- replicateM (hEADER_FEAT_BITS `quot` 32) $ getU32
     return PerfFileHeader{..}
 
@@ -119,39 +128,50 @@ data PerfFileAttr = PerfFileAttr {
 parseFileAttr :: GetEvents PerfFileAttr
 parseFileAttr = do
   fa_attr <- parseEventAttr
-  PerfFileSection fa_ids_offset fa_ids_size <- readFileSection
+  PerfFileSection fa_ids_offset fa_ids_size <- parseFileSection
   return PerfFileAttr{..}
+
+readHeader :: Handle -> IO PerfFileHeader
+readHeader h = do
+   b <- B.hGet h (#size struct perf_file_header)
+{-
+   printf "fh_size          = %d\n" $ fh_size fh
+   printf "fh_attr_size     = %d\n" $ fh_attr_size fh
+   printf "fh_attrs_offset  = %d\n" $ fh_attrs_offset fh
+   printf "fh_attrs_size    = %d\n" $ fh_attrs_size fh
+   printf "fh_data_offset   = %d\n" $ fh_data_offset fh
+   printf "fh_data_size     = %d\n" $ fh_data_size fh
+   printf "fh_event_offset  = %d\n" $ fh_event_offset fh
+   printf "fh_event_size    = %d\n" $ fh_event_size fh
+   printf "fh_adds_features = %s\n" $ (show (fh_adds_features fh))
+-}
+   runGetEventsCheck parseFileHeader b
+
+readAttributes :: Handle -> PerfFileHeader -> IO [PerfFileAttr]
+readAttributes h fh = do
+   -- XXX I wonder if this calculation should be:
+   -- fh_attrs_size fh `quot` fh_attr_size fh ?
+   let nr_attrs = fh_attrs_size fh `quot` (#size struct perf_file_attr)
+   -- printf "nr_attrs = %d\n" nr_attrs
+   -- printf "size struct perf_file_attr: %d\n" ((#size struct perf_file_attr) :: Int)
+   hSeek h AbsoluteSeek (fromIntegral (fh_attrs_offset fh))
+   b <- hGet h (fromIntegral (fh_attrs_size fh))
+   runGetEventsCheck (replicateM (fromIntegral nr_attrs) parseFileAttr) b
+
+bytesInWord64 :: Int
+bytesInWord64 = 8
+
+readAttributeIDs :: Handle -> PerfFileAttr -> IO [Word64]
+readAttributeIDs h attr = do
+   let offset = fromIntegral $ fa_ids_offset attr
+       size = fromIntegral $ fa_ids_size attr
+   hSeek h AbsoluteSeek offset
+   b <- B.hGet h (size * bytesInWord64)
+   runGetEventsCheck (replicateM size getU64) b
 
 readEventsFromFile :: FilePath -> IO (PerfFileHeader, [PerfFileAttr])
 readEventsFromFile f = do
     h <- openFile f ReadMode
-
-    b <- B.hGet h (#size struct perf_file_header)
-    fh <- case runGet (runErrorT $ readFileHeader) b of
-            Left err -> fail err
-            Right r  -> return r
-
-    printf "fh_size          = %d\n" $ fh_size fh
-    printf "fh_attr_size     = %d\n" $ fh_attr_size fh
-    printf "fh_attrs_offset  = %d\n" $ fh_attrs_offset fh
-    printf "fh_attrs_size    = %d\n" $ fh_attrs_size fh
-    printf "fh_data_offset   = %d\n" $ fh_data_offset fh
-    printf "fh_data_size     = %d\n" $ fh_data_size fh
-    printf "fh_event_offset  = %d\n" $ fh_event_offset fh
-    printf "fh_event_size    = %d\n" $ fh_event_size fh
-    printf "fh_adds_features = %s\n" $ (show (fh_adds_features fh))
-
-    -- XXX I wonder if this calculation should be:
-    -- fh_attrs_size fh `quot` fh_attr_size fh ?
-    let nr_attrs = fh_attrs_size fh `quot` (#size struct perf_file_attr)
-    printf "nr_attrs = %d\n" nr_attrs
-
-    printf "size struct perf_file_attr: %d\n" ((#size struct perf_file_attr) :: Int)
-    hSeek h AbsoluteSeek (fromIntegral (fh_attrs_offset fh))
-    b <- hGet h (fromIntegral (fh_attrs_size fh))
-    attrs <- case runGet (runErrorT $ replicateM (fromIntegral nr_attrs)
-                                                 parseFileAttr) b of
-               Left err -> fail err
-               Right r  -> return r
-
-    return (fh, attrs)
+    header <- readHeader h
+    attrs <- readAttributes h header
+    return (header, attrs)
