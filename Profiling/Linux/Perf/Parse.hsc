@@ -235,12 +235,12 @@ instance Pretty CommEvent where
 
 -- Corresponds with the mmap_event struct in <perf source>/util/event.h (without the header)
 data MmapEvent = MmapEvent {
-   me_pid :: Word32,
-   me_tid :: Word32,
-   me_start :: Word64,
-   me_len :: Word64,
-   me_pgoff :: Word64,
-   me_filename :: String
+   me_pid :: Word32,     -- process id
+   me_tid :: Word32,     -- thread id
+   me_start :: Word64,   -- start of memory range
+   me_len :: Word64,     -- size of memory range
+   me_pgoff :: Word64,   -- page offset? XXX what is this for?
+   me_filename :: String -- binary file using this range
 }
 
 instance Pretty MmapEvent where
@@ -251,6 +251,32 @@ instance Pretty MmapEvent where
       text "len:" <+> pretty (me_len me) $$
       text "pgoff:" <+> pretty (me_pgoff me) $$
       text "filename:" <+> text (me_filename me)
+
+-- Corresponds with the fork_event struct in <perf source>/util/event.h (without the header)
+data ForkEvent = ForkEvent {
+   fe_pid :: Word32,    -- process id
+   fe_ppid :: Word32,   -- parent proecess id
+   fe_tid :: Word32,    -- thread id
+   fe_ptid :: Word32,   -- parent thread id
+   fe_time :: Word64    -- timestamp
+}
+
+instance Pretty ForkEvent where
+   pretty fe =
+      text "pid:" <+> pretty (fe_pid fe) $$
+      text "ppid:" <+> pretty (fe_ppid fe) $$
+      text "tid:" <+> pretty (fe_tid fe) $$
+      text "ptid:" <+> pretty (fe_ptid fe) $$
+      text "time:" <+> pretty (fe_time fe)
+
+readForkEvent :: GetEvents ForkEvent
+readForkEvent = do
+   fe_pid <- getU32
+   fe_ppid <- getU32
+   fe_tid <- getU32
+   fe_ptid <- getU32
+   fe_time <- getU64
+   return ForkEvent{..}
 
 -- -----------------------------------------------------------------------------
 
