@@ -37,5 +37,6 @@ Executable dump-perf {
   Main-is: dump-perf.hs
   hs-source-dirs: dump-perf
   Build-depends: linux-perf==0.1,
-                 base==4.*
+                 base==4.*,
+                 pretty==1.0.*
 }
