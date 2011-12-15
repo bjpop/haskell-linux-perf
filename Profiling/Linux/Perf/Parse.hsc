@@ -278,6 +278,32 @@ readForkEvent = do
    fe_time <- getU64
    return ForkEvent{..}
 
+-- Corresponds with the exit_event struct in <perf source>/util/event.h (without the header)
+data ExitEvent = ExitEvent {
+   ee_pid :: Word32,    -- process id
+   ee_ppid :: Word32,   -- parent proecess id
+   ee_tid :: Word32,    -- thread id
+   ee_ptid :: Word32,   -- parent thread id
+   ee_time :: Word64    -- timestamp
+}
+
+instance Pretty ExitEvent where
+   pretty ee =
+      text "pid:" <+> pretty (ee_pid ee) $$
+      text "ppid:" <+> pretty (ee_ppid ee) $$
+      text "tid:" <+> pretty (ee_tid ee) $$
+      text "ptid:" <+> pretty (ee_ptid ee) $$
+      text "time:" <+> pretty (ee_time ee)
+
+readExitEvent :: GetEvents ExitEvent
+readExitEvent = do
+   ee_pid <- getU32
+   ee_ppid <- getU32
+   ee_tid <- getU32
+   ee_ptid <- getU32
+   ee_time <- getU64
+   return ExitEvent{..}
+
 -- Corresponds with the lost_event struct in <perf source>/util/event.h (without the header)
 data LostEvent = LostEvent {
    le_id :: Word64,
