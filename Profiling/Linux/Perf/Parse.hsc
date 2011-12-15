@@ -278,9 +278,7 @@ readForkEvent = do
    fe_time <- getU64
    return ForkEvent{..}
 
-
 -- Corresponds with the lost_event struct in <perf source>/util/event.h (without the header)
-
 data LostEvent = LostEvent {
    le_id :: Word64,
    le_lost :: Word64
