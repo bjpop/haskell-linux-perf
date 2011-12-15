@@ -278,6 +278,25 @@ readForkEvent = do
    fe_time <- getU64
    return ForkEvent{..}
 
+
+-- Corresponds with the lost_event struct in <perf source>/util/event.h (without the header)
+
+data LostEvent = LostEvent {
+   le_id :: Word64,
+   le_lost :: Word64
+}
+
+instance Pretty LostEvent where
+   pretty le =
+      text "id:" <+> pretty (le_id le) $$
+      text "lost:" <+> pretty (le_lost le)
+
+readLostEvent :: GetEvents LostEvent
+readLostEvent = do
+   le_id <- getU64
+   le_lost <- getU64
+   return LostEvent{..}
+
 -- -----------------------------------------------------------------------------
 
 readEventHeader :: Handle -> Word64 -> IO PerfEventHeader
