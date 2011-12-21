@@ -94,13 +94,13 @@ parseFileAttr = do
 
 parseEventHeader :: GetEvents EventHeader
 parseEventHeader = do
-   eh_type <- getU32
+   eh_type <- (toEnum . fromIntegral) `fmap` getU32
    eh_misc <- getU16
    eh_size <- getU16
    return EventHeader{..}
 
-readMmapEvent :: GetEvents EventPayload 
-readMmapEvent = do
+parseMmapEvent :: GetEvents EventPayload 
+parseMmapEvent = do
    me_pid <- getU32
    me_tid <- getU32
    me_start <- getU64
@@ -109,8 +109,8 @@ readMmapEvent = do
    let me_filename = "foobar" -- XXX fixme
    return MmapEvent{..}
 
-readForkEvent :: GetEvents EventPayload
-readForkEvent = do
+parseForkEvent :: GetEvents EventPayload
+parseForkEvent = do
    fe_pid <- getU32
    fe_ppid <- getU32
    fe_tid <- getU32
@@ -118,8 +118,8 @@ readForkEvent = do
    fe_time <- getU64
    return ForkEvent{..}
 
-readExitEvent :: GetEvents EventPayload
-readExitEvent = do
+parseExitEvent :: GetEvents EventPayload
+parseExitEvent = do
    ee_pid <- getU32
    ee_ppid <- getU32
    ee_tid <- getU32
@@ -127,11 +127,24 @@ readExitEvent = do
    ee_time <- getU64
    return ExitEvent{..}
 
-readLostEvent :: GetEvents EventPayload
-readLostEvent = do
+parseLostEvent :: GetEvents EventPayload
+parseLostEvent = do
    le_id <- getU64
    le_lost <- getU64
    return LostEvent{..}
+
+parseEventPayload :: EventType -> GetEvents EventPayload
+parseEventPayload eventType =
+   case eventType of
+      PERF_RECORD_MMAP -> parseMmapEvent
+      PERF_RECORD_LOST -> parseLostEvent
+      -- PERF_RECORD_COMM -> parseCommEvent
+      PERF_RECORD_EXIT -> parseExitEvent
+      -- PERF_RECORD_THROTTLE -> parseThrottleEvent
+      -- PERF_RECORD_UNTHROTTLE -> parseUnThrottleEvent
+      PERF_RECORD_FORK -> parseForkEvent
+      -- PERF_RECORD_READ -> parseReadEvent
+      -- PERF_RECORD_SAMPLE -> parseSampleEvent
 
 -- -----------------------------------------------------------------------------
 

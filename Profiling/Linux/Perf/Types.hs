@@ -51,12 +51,11 @@ data Event =
 
 instance Pretty Event where
    pretty ev@(Event {}) =
-      text "header: " <+> (pretty ev_header ev) $$
-      text "payload: " <+> (pretty ev_payload ev)
+      text "header: " <+> (pretty $ ev_header ev) $$
+      text "payload: " <+> (pretty $ ev_payload ev)
 
 data EventType -- perf_event_header->type
-   = EventType_0            -- unused
-   | PERF_RECORD_MMAP       -- 1
+   = PERF_RECORD_MMAP       -- 1
    | PERF_RECORD_LOST       -- 2
    | PERF_RECORD_COMM       -- 3
    | PERF_RECORD_EXIT       -- 4
@@ -65,7 +64,30 @@ data EventType -- perf_event_header->type
    | PERF_RECORD_FORK       -- 7
    | PERF_RECORD_READ       -- 8
    | PERF_RECORD_SAMPLE     -- 9
-   deriving (Eq,Show)
+   deriving (Eq, Show)
+
+instance Enum EventType where
+
+   toEnum 1 = PERF_RECORD_MMAP
+   toEnum 2 = PERF_RECORD_LOST
+   toEnum 3 = PERF_RECORD_COMM
+   toEnum 4 = PERF_RECORD_EXIT
+   toEnum 5 = PERF_RECORD_THROTTLE
+   toEnum 6 = PERF_RECORD_UNTHROTTLE
+   toEnum 7 = PERF_RECORD_FORK
+   toEnum 8 = PERF_RECORD_READ
+   toEnum 9 = PERF_RECORD_SAMPLE
+   toEnum other = error ("bad event type number: " ++ show other)
+
+   fromEnum PERF_RECORD_MMAP = 1
+   fromEnum PERF_RECORD_LOST = 2
+   fromEnum PERF_RECORD_COMM = 3
+   fromEnum PERF_RECORD_EXIT = 4
+   fromEnum PERF_RECORD_THROTTLE = 5
+   fromEnum PERF_RECORD_UNTHROTTLE = 6
+   fromEnum PERF_RECORD_FORK = 7
+   fromEnum PERF_RECORD_READ = 8
+   fromEnum PERF_RECORD_SAMPLE = 9
 
 instance Pretty EventType where
    pretty = text . show
@@ -75,7 +97,7 @@ data EventCPUMode -- a bitfield in perf_event_header->misc
    | PERF_RECORD_MISC_KERNEL     -- 1
    | PERF_RECORD_MISC_USER       -- 2
    | PERF_RECORD_MISC_HYPERVISOR -- 3
-   deriving (Eq,Show)
+   deriving (Eq, Show)
 
 instance Pretty EventCPUMode where
    pretty = text . show
@@ -164,7 +186,8 @@ instance Pretty FileAttr where
 
 -- Corresponds with the perf_event_header struct in <perf source>/util/perf_event.h
 data EventHeader = EventHeader {
-   eh_type :: Word32,
+   -- eh_type :: Word32,
+   eh_type :: EventType,
    eh_misc :: Word16,
    eh_size :: Word16
 }
