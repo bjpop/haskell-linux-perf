@@ -15,7 +15,7 @@ main = do
 
 die s = do hPutStrLn stderr s; exitWith (ExitFailure 1)
 
-dumper :: FilePath -> IO (PerfFileHeader, [PerfFileAttr])
+dumper :: FilePath -> IO (FileHeader, [FileAttr])
 dumper f = do
    h <- openFile f ReadMode
    header <- readHeader h
