@@ -6,6 +6,7 @@ import Text.Printf
 import Text.PrettyPrint
 import Data.Word
 
+main :: IO ()
 main = do
   args <- getArgs
   file <- case args of
@@ -34,9 +35,14 @@ dumper f = do
    separator
    let prettyAttrAndIds (attr, ids) = pretty attr $$ (text "ids:" <+> (hsep $ Prelude.map pretty ids))
    printf "%s\n" $ render $ vcat $ Prelude.map prettyAttrAndIds $ Prelude.zip attrs idss
-   let dataOffset = fh_data_offset header
+   -- we assume the sampleType comes from the first attr
+   -- it is not clear what to do if there is more than one, or even if that is valid.
+   let sampleType =
+          case attrs of
+             [] -> 0 -- assume none of the sample types are set
+             firstAttr:_ -> ea_sample_type $ fa_attr $ firstAttr
+       dataOffset = fh_data_offset header
        maxOffset = fh_data_size header + dataOffset
-       sampleType = ea_sample_type (fa_attr (attrs !! 0)) -- XXX must check attrs is not empty
    dumpEvents h maxOffset dataOffset sampleType
 
 dumpEvents :: Handle -> Word64 -> Word64 -> Word64 -> IO ()
