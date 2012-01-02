@@ -10,10 +10,13 @@ module Profiling.Linux.Perf.Types
    , FileAttr (..)
    , EventHeader (..)
    , EventPayload (..)
+   , SampleFormat (..)
    )where
 
 import Data.Word
+import Data.Char (chr)
 import Text.PrettyPrint
+import Data.ByteString.Lazy (ByteString, unpack)
 
 -- -----------------------------------------------------------------------------
 -- Pretty printing interface
@@ -24,6 +27,13 @@ class Pretty a where
 prettyString :: Pretty a => a -> String
 prettyString = render . pretty
 
+instance Pretty a => Pretty (Maybe a) where
+   pretty Nothing = empty
+   pretty (Just x) = pretty x
+
+instance Pretty Word8 where
+   pretty = integer . fromIntegral
+
 instance Pretty Word16 where
    pretty = integer . fromIntegral
 
@@ -32,6 +42,12 @@ instance Pretty Word32 where
 
 instance Pretty Word64 where
    pretty = integer . fromIntegral
+
+instance Pretty ByteString where
+   pretty = text . unpackAsChars
+      where
+      unpackAsChars :: ByteString -> String
+      unpackAsChars bs = foldr (\c cs -> (chr $ fromIntegral c) : cs) [] (unpack bs)
 
 -- -----------------------------------------------------------------------------
 -- Event data types
@@ -54,6 +70,7 @@ instance Pretty Event where
       text "header: " <+> (pretty $ ev_header ev) $$
       text "payload: " <+> (pretty $ ev_payload ev)
 
+-- XXX should probably get this from the definintion of the C type
 data EventType -- perf_event_header->type
    = PERF_RECORD_MMAP       -- 1
    | PERF_RECORD_LOST       -- 2
@@ -90,6 +107,23 @@ instance Enum EventType where
    fromEnum PERF_RECORD_SAMPLE = 9
 
 instance Pretty EventType where
+   pretty = text . show
+
+data SampleFormat
+   = PERF_SAMPLE_IP        -- 1U << 0
+   | PERF_SAMPLE_TID       -- 1U << 1
+   | PERF_SAMPLE_TIME      -- 1U << 2
+   | PERF_SAMPLE_ADDR      -- 1U << 3
+   | PERF_SAMPLE_READ      -- 1U << 4
+   | PERF_SAMPLE_CALLCHAIN -- 1U << 5
+   | PERF_SAMPLE_ID        -- 1U << 6
+   | PERF_SAMPLE_CPU       -- 1U << 7
+   | PERF_SAMPLE_PERIOD    -- 1U << 8
+   | PERF_SAMPLE_STREAM_ID -- 1U << 9
+   | PERF_SAMPLE_RAW       -- 1U << 10
+   deriving (Eq, Enum, Show)
+
+instance Pretty SampleFormat where
    pretty = text . show
 
 data EventCPUMode -- a bitfield in perf_event_header->misc
@@ -186,7 +220,6 @@ instance Pretty FileAttr where
 
 -- Corresponds with the perf_event_header struct in <perf source>/util/perf_event.h
 data EventHeader = EventHeader {
-   -- eh_type :: Word32,
    eh_type :: EventType,
    eh_misc :: Word16,
    eh_size :: Word16
@@ -203,7 +236,7 @@ data EventPayload =
    CommEvent {
       ce_pid :: Word32,  -- process id
       ce_tid :: Word32,  -- thread id
-      ce_comm :: String  -- name of the application
+      ce_comm :: ByteString -- name of the application
    }
    -- Corresponds with the mmap_event struct in <perf source>/util/event.h (without the header)
    | MmapEvent {
@@ -212,7 +245,7 @@ data EventPayload =
       me_start :: Word64,   -- start of memory range
       me_len :: Word64,     -- size of memory range
       me_pgoff :: Word64,   -- page offset? XXX what is this for?
-      me_filename :: String -- binary file using this range
+      me_filename :: ByteString -- binary file using this range
    }
    -- Corresponds with the fork_event struct in <perf source>/util/event.h (without the header)
    | ForkEvent {
@@ -235,19 +268,31 @@ data EventPayload =
       le_id :: Word64,
       le_lost :: Word64
    }
+   | SampleEvent {
+      se_ip :: Maybe Word64,
+      se_pid :: Maybe Word32,
+      se_tid :: Maybe Word32,
+      se_time :: Maybe Word64,
+      se_addr :: Maybe Word64,
+      se_id :: Maybe Word64,
+      se_streamid :: Maybe Word64,
+      se_cpu :: Maybe Word32,
+      se_period :: Maybe Word64
+   }
+   deriving (Show)
 
 instance Pretty EventPayload where
    pretty ce@(CommEvent{}) =
       text "pid:" <+> pretty (ce_pid ce) $$
       text "tid:" <+> pretty (ce_tid ce) $$
-      text "comm:" <+> text (ce_comm ce)
+      text "comm:" <+> pretty (ce_comm ce)
    pretty me@(MmapEvent{}) =
       text "pid:" <+> pretty (me_pid me) $$
       text "tid:" <+> pretty (me_tid me) $$
       text "start:" <+> pretty (me_start me) $$
       text "len:" <+> pretty (me_len me) $$
       text "pgoff:" <+> pretty (me_pgoff me) $$
-      text "filename:" <+> text (me_filename me)
+      text "filename:" <+> pretty (me_filename me)
    pretty fe@(ForkEvent{}) =
       text "pid:" <+> pretty (fe_pid fe) $$
       text "ppid:" <+> pretty (fe_ppid fe) $$
@@ -263,3 +308,13 @@ instance Pretty EventPayload where
    pretty le@(LostEvent {}) =
       text "id:" <+> pretty (le_id le) $$
       text "lost:" <+> pretty (le_lost le)
+   pretty se@(SampleEvent {}) =
+      text "ip:" <+> pretty (se_ip se) $$
+      text "pid:" <+> pretty (se_pid se) $$
+      text "tid:" <+> pretty (se_tid se) $$
+      text "time:" <+> pretty (se_time se) $$
+      text "addr:" <+> pretty (se_addr se) $$
+      text "id:" <+> pretty (se_id se) $$
+      text "streamid:" <+> pretty (se_streamid se) $$
+      text "cpu:" <+> pretty (se_cpu se) $$
+      text "period:" <+> pretty (se_period se)
