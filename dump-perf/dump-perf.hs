@@ -1,3 +1,25 @@
+-----------------------------------------------------------------------------
+-- |
+-- Copyright   : (c) 2010,2011,2012 Simon Marlow, Bernie Pope 
+-- License     : BSD-style
+-- Maintainer  : florbitous@gmail.com
+-- Stability   : experimental
+-- Portability : ghc
+--
+-- A program to parse and then pretty print the contents of "perf.data" to
+-- stdout. "perf.data" is the the output of the "perf record" command on
+-- linux (linux performance counter information).
+--
+-- The main use of this program is to demonstrate how to use the
+-- Profilinf.Linux.Perf library.
+--
+-- Usage: dump-perf <filename>
+--
+-- If filename is missing then it will assume the input is "perf.data" in
+-- the current working directory.
+--
+-----------------------------------------------------------------------------
+
 import Profiling.Linux.Perf
 import System.Exit
 import System.IO
@@ -20,6 +42,8 @@ die s = do hPutStrLn stderr s; exitWith (ExitFailure 1)
 separator :: IO ()
 separator = printf "%s\n" $ Prelude.replicate 40 '-'
 
+-- Read the contents of the perf.data file and pretty print it to
+-- standard output.
 dumper :: FilePath -> IO ()
 dumper f = do
    h <- openFile f ReadMode
@@ -45,6 +69,7 @@ dumper f = do
        maxOffset = fh_data_size header + dataOffset
    dumpEvents h maxOffset dataOffset sampleType
 
+-- Read the stream of data samples and pretty print them to stdout.
 dumpEvents :: Handle -> Word64 -> Word64 -> Word64 -> IO ()
 dumpEvents h maxOffset offset sampleType
    | offset >= maxOffset = return ()
@@ -54,6 +79,7 @@ dumpEvents h maxOffset offset sampleType
         printf "Perf Event:\n"
         separator
         printf "%s\n" $ prettyString event
+        -- Calculate the file offset for the next sample.
         let size = eh_size $ ev_header event 
             nextOffset = offset + fromIntegral size
         dumpEvents h maxOffset nextOffset sampleType

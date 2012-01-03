@@ -1,3 +1,17 @@
+-----------------------------------------------------------------------------
+-- |
+-- Copyright   : (c) 2010,2011,2012 Simon Marlow, Bernie Pope
+-- License     : BSD-style
+-- Maintainer  : florbitous@gmail.com
+-- Stability   : experimental
+-- Portability : ghc
+--
+-- Types for representing the parsed contents of a "perf.data" file
+-- "perf.data" is the the output of the "perf record" command on
+-- linux (linux performance counter information).
+--
+-----------------------------------------------------------------------------
+
 module Profiling.Linux.Perf.Types 
    ( Pretty (..)
    , prettyString

@@ -1,5 +1,19 @@
 {-# LANGUAGE RecordWildCards #-}
 
+-----------------------------------------------------------------------------
+-- |
+-- Copyright   : (c) 2010,2011,2012 Simon Marlow, Bernie Pope 
+-- License     : BSD-style
+-- Maintainer  : florbitous@gmail.com
+-- Stability   : experimental
+-- Portability : ghc
+--
+-- A library to parse and pretty print the contents of "perf.data" file
+-- "perf.data" is the the output of the "perf record" command on
+-- linux (linux performance counter information).
+--
+-----------------------------------------------------------------------------
+
 module Profiling.Linux.Perf.Parse
    ( readHeader
    , readAttributes
@@ -15,7 +29,8 @@ import Data.Binary
 import Control.Monad.Error
 import System.IO
 import Data.ByteString.Lazy as B (ByteString, hGet)
-import Data.Binary.Get (Get, runGet, getLazyByteStringNul, getWord16le, getWord32le, getWord64le)
+import Data.Binary.Get
+   (Get, runGet, getLazyByteStringNul, getWord16le, getWord32le, getWord64le)
 import Debug.Trace
 import Text.Printf
 import Data.Bits (testBit)
@@ -27,11 +42,12 @@ import Data.Bits (testBit)
 
 type GetEvents a = ErrorT String Get a
 
-getBSNul :: GetEvents B.ByteString
-getBSNul = lift getLazyByteStringNul
-
 getE :: Binary a => GetEvents a
 getE = lift get
+
+-- read a null terminated (lazy) byte string
+getBSNul :: GetEvents B.ByteString
+getBSNul = lift getLazyByteStringNul
 
 -- read an unsigned 8 bit word
 getU8 :: GetEvents Word8
@@ -58,7 +74,9 @@ runGetEventsCheck g b =
       Left e -> fail e
       Right v -> return v
 
-pERF_MAGIC = 0x454c494646524550 :: Word64 -- "PERFFILE"
+-- magic 8 bytes at the start of the perf file, "PERFFILE"
+pERF_MAGIC = 0x454c494646524550 :: Word64
+
 hEADER_FEAT_BITS = (#const HEADER_FEAT_BITS) :: Int
 
 parseFileSection :: GetEvents FileSection
@@ -209,7 +227,6 @@ readEvent h offset sampleType = do
    payloadBytes <- B.hGet h payloadSize
    ev_payload <- runGetEventsCheck (parseEventPayload sampleType $ eh_type ev_header) payloadBytes
    return Event{..}
-
 
 readHeader :: Handle -> IO FileHeader
 readHeader h = do
