@@ -83,11 +83,32 @@ pERF_MAGIC = 0x454c494646524550 :: Word64
 
 hEADER_FEAT_BITS = (#const HEADER_FEAT_BITS) :: Int
 
+-- -----------------------------------------------------------------------------
+
+-- from <perf source>/util/header.h 
+--
+-- struct perf_file_section {
+--      u64 offset;
+--      u64 size;
+-- };
+
 parseFileSection :: GetEvents FileSection
 parseFileSection = do
     sec_offset <- getU64
     sec_size   <- getU64
     return FileSection{..}
+
+-- from <perf source>/util/header.h 
+--
+-- struct perf_file_header {
+--      u64                             magic;
+--      u64                             size;
+--      u64                             attr_size;
+--      struct perf_file_section        attrs;
+--      struct perf_file_section        data;
+--      struct perf_file_section        event_types;
+--      DECLARE_BITMAP(adds_features, HEADER_FEAT_BITS);
+-- };
 
 parseFileHeader :: GetEvents FileHeader
 parseFileHeader = do
@@ -101,6 +122,79 @@ parseFileHeader = do
     FileSection fh_event_offset fh_event_size  <- parseFileSection
     fh_adds_features <- replicateM (hEADER_FEAT_BITS `quot` 32) $ getU32
     return FileHeader{..}
+
+-- from <system include directory>/linux/perf_event.h
+--
+-- struct perf_event_attr {
+--
+--      /*
+--       * Major type: hardware/software/tracepoint/etc.
+--       */
+--      __u32                   type;
+--
+--      /*
+--       * Size of the attr structure, for fwd/bwd compat.
+--       */
+--      __u32                   size;
+--
+--      /*
+--       * Type specific configuration information.
+--       */
+--      __u64                   config;
+--
+--      union {
+--              __u64           sample_period;
+--              __u64           sample_freq;
+--      };
+--      __u64                   sample_type;
+--      __u64                   read_format;
+--
+--      __u64                   disabled       :  1, /* off by default        */
+--                              inherit        :  1, /* children inherit it   */
+--                              pinned         :  1, /* must always be on PMU */
+--                              exclusive      :  1, /* only group on PMU     */
+--                              exclude_user   :  1, /* don't count user      */
+--                              exclude_kernel :  1, /* ditto kernel          */
+--                              exclude_hv     :  1, /* ditto hypervisor      */
+--                              exclude_idle   :  1, /* don't count when idle */
+--                              mmap           :  1, /* include mmap data     */
+--                              comm           :  1, /* include comm data     */
+--                              freq           :  1, /* use freq, not period  */
+--                              inherit_stat   :  1, /* per task counts       */
+--                              enable_on_exec :  1, /* next exec enables     */
+--                              task           :  1, /* trace fork/exit       */
+--                              watermark      :  1, /* wakeup_watermark      */
+--                              /*
+--                               * precise_ip:
+--                               *
+--                               *  0 - SAMPLE_IP can have arbitrary skid
+--                               *  1 - SAMPLE_IP must have constant skid
+--                               *  2 - SAMPLE_IP requested to have 0 skid
+--                               *  3 - SAMPLE_IP must have 0 skid
+--                               *
+--                               *  See also PERF_RECORD_MISC_EXACT_IP
+--                               */
+--                              precise_ip     :  2, /* skid constraint       */
+--                              mmap_data      :  1, /* non-exec mmap data    */
+--                              sample_id_all  :  1, /* sample_type all events */
+--
+--                              __reserved_1   : 45;
+--
+--      union {
+--              __u32           wakeup_events;    /* wakeup every n events */
+--              __u32           wakeup_watermark; /* bytes before wakeup   */
+--      };
+--
+--      __u32                   bp_type;
+--      union {
+--              __u64           bp_addr;
+--              __u64           config1; /* extension of config */
+--      };
+--      union {
+--              __u64           bp_len;
+--              __u64           config2; /* extension of config1 */
+--      };
+-- };
 
 parseEventAttr :: GetEvents EventAttr
 parseEventAttr = do
@@ -117,11 +211,26 @@ parseEventAttr = do
    ea_bp_len_or_config2 <- getU64
    return EventAttr{..}
 
+-- from <perf source>/util/header.c
+--
+-- struct perf_file_attr {
+--      struct perf_event_attr attr;
+--      struct perf_file_section ids;
+-- };
+
 parseFileAttr :: GetEvents FileAttr
 parseFileAttr = do
   fa_attr <- parseEventAttr
   FileSection fa_ids_offset fa_ids_size <- parseFileSection
   return FileAttr{..}
+
+-- from <system include directory>/linux/perf_event.h
+
+-- struct perf_event_header {
+--      __u32   type;
+--      __u16   misc;
+--      __u16   size;
+-- };
 
 parseEventHeader :: GetEvents EventHeader
 parseEventHeader = do
