@@ -34,6 +34,7 @@ import Data.Binary.Get
 import Debug.Trace
 import Text.Printf
 import Data.Bits (testBit)
+import Foreign.Storable (sizeOf)
 
 #include <linux/perf_event.h>
 #include "perf_file.h"
@@ -242,9 +243,8 @@ readAttributes h fh = do
    b <- B.hGet h (fromIntegral (fh_attrs_size fh))
    runGetEventsCheck (replicateM (fromIntegral nr_attrs) parseFileAttr) b
 
--- XXX this should be calculated
 bytesInWord64 :: Int
-bytesInWord64 = 8
+bytesInWord64 = sizeOf (undefined :: Word64)
 
 readAttributeIDs :: Handle -> FileAttr -> IO [Word64]
 readAttributeIDs h attr = do
