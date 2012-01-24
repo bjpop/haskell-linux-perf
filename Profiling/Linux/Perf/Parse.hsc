@@ -41,6 +41,9 @@ import Foreign.Storable (sizeOf)
 
 -- -----------------------------------------------------------------------------
 
+bytesInWord64 :: Int
+bytesInWord64 = sizeOf (undefined :: Word64)
+
 type GetEvents a = ErrorT String Get a
 
 getE :: Binary a => GetEvents a
@@ -242,9 +245,6 @@ readAttributes h fh = do
    hSeek h AbsoluteSeek (fromIntegral (fh_attrs_offset fh))
    b <- B.hGet h (fromIntegral (fh_attrs_size fh))
    runGetEventsCheck (replicateM (fromIntegral nr_attrs) parseFileAttr) b
-
-bytesInWord64 :: Int
-bytesInWord64 = sizeOf (undefined :: Word64)
 
 readAttributeIDs :: Handle -> FileAttr -> IO [Word64]
 readAttributeIDs h attr = do
