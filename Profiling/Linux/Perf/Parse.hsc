@@ -239,8 +239,20 @@ parseEventHeader = do
    eh_size <- getU16
    return EventHeader{..}
 
+-- from <perf source>/utils/event.h
+
+-- struct mmap_event {
+--      struct perf_event_header header;
+--      u32 pid, tid;
+--      u64 start;
+--      u64 len;
+--      u64 pgoff;
+--      char filename[PATH_MAX];
+-- };
+
 parseMmapEvent :: GetEvents EventPayload 
 parseMmapEvent = do
+   -- note we do not parse the event header here, it is done in parseEvent
    me_pid <- getU32
    me_tid <- getU32
    me_start <- getU64
@@ -249,12 +261,29 @@ parseMmapEvent = do
    me_filename <- getBSNul
    return MmapEvent{..}
 
+-- from <perf source>/utils/event.h
+
+-- struct comm_event {
+--      struct perf_event_header header;
+--      u32 pid, tid;
+--      char comm[16];
+-- };
+
 parseCommEvent :: GetEvents EventPayload
 parseCommEvent = do
    ce_pid <- getU32
    ce_tid <- getU32
    ce_comm <- getBSNul
    return CommEvent{..}
+
+-- from <perf source>/utils/event.h
+
+-- struct fork_event {
+--      struct perf_event_header header;
+--      u32 pid, ppid;
+--      u32 tid, ptid;
+--      u64 time;
+-- };
 
 parseForkEvent :: GetEvents EventPayload
 parseForkEvent = do
@@ -265,6 +294,8 @@ parseForkEvent = do
    fe_time <- getU64
    return ForkEvent{..}
 
+-- I think exit event is handled like fork event.
+
 parseExitEvent :: GetEvents EventPayload
 parseExitEvent = do
    ee_pid <- getU32
@@ -273,6 +304,12 @@ parseExitEvent = do
    ee_ptid <- getU32
    ee_time <- getU64
    return ExitEvent{..}
+
+-- struct lost_event {
+--      struct perf_event_header header;
+--      u64 id;
+--      u64 lost;
+-- };
 
 parseLostEvent :: GetEvents EventPayload
 parseLostEvent = do
