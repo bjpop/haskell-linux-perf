@@ -225,7 +225,7 @@ parseFileAttr = do
   return FileAttr{..}
 
 -- from <system include directory>/linux/perf_event.h
-
+--
 -- struct perf_event_header {
 --      __u32   type;
 --      __u16   misc;
@@ -239,8 +239,8 @@ parseEventHeader = do
    eh_size <- getU16
    return EventHeader{..}
 
--- from <perf source>/utils/event.h
-
+-- from <perf source>/util/event.h
+--
 -- struct mmap_event {
 --      struct perf_event_header header;
 --      u32 pid, tid;
@@ -261,8 +261,8 @@ parseMmapEvent = do
    me_filename <- getBSNul
    return MmapEvent{..}
 
--- from <perf source>/utils/event.h
-
+-- from <perf source>/util/event.h
+--
 -- struct comm_event {
 --      struct perf_event_header header;
 --      u32 pid, tid;
@@ -276,8 +276,8 @@ parseCommEvent = do
    ce_comm <- getBSNul
    return CommEvent{..}
 
--- from <perf source>/utils/event.h
-
+-- from <perf source>/util/event.h
+--
 -- struct fork_event {
 --      struct perf_event_header header;
 --      u32 pid, ppid;
@@ -305,6 +305,8 @@ parseExitEvent = do
    ee_time <- getU64
    return ExitEvent{..}
 
+-- from <perf source>/util/event.h
+--
 -- struct lost_event {
 --      struct perf_event_header header;
 --      u64 id;
@@ -319,7 +321,28 @@ parseLostEvent = do
 
 parseThrottleEvent = error "parseThrottleEvent"
 parseUnThrottleEvent = error "parseUnThrottleEvent"
-parseReadEvent = error "parseReadEvent"
+
+-- from <perf source>/util/event.h
+--
+-- struct read_event {
+--      struct perf_event_header header;
+--      u32 pid, tid;
+--      u64 value;
+--      u64 time_enabled;
+--      u64 time_running;
+--      u64 id;
+-- };
+
+-- parseReadEvent = error "parseReadEvent"
+parseReadEvent :: GetEvents EventPayload
+parseReadEvent = do
+   re_pid <- getU32
+   re_tid <- getU32
+   re_value <- getU64
+   re_time_enabled <- getU64
+   re_time_running <- getU64
+   re_id <- getU64
+   return ReadEvent{..}
 
 parseSampleType :: Word64 -> SampleFormat -> GetEvents a -> GetEvents (Maybe a)
 parseSampleType sampleType format parser

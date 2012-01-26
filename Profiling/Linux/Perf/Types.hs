@@ -282,6 +282,15 @@ data EventPayload =
       le_id :: Word64,
       le_lost :: Word64
    }
+   -- Corresponds with the read_event struct in <perf source>/util/event.h (without the header)
+   | ReadEvent {
+      re_pid :: Word32,
+      re_tid :: Word32,
+      re_value :: Word64,
+      re_time_enabled :: Word64,
+      re_time_running :: Word64,
+      re_id :: Word64
+   }
    | SampleEvent {
       se_ip :: Maybe Word64,
       se_pid :: Maybe Word32,
