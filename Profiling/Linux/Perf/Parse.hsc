@@ -294,7 +294,7 @@ parseForkEvent = do
    fe_time <- getU64
    return ForkEvent{..}
 
--- I think exit event is handled like fork event.
+-- ForkEvent and ExitEvent have the same binary structure.
 
 parseExitEvent :: GetEvents EventPayload
 parseExitEvent = do
@@ -319,8 +319,29 @@ parseLostEvent = do
    le_lost <- getU64
    return LostEvent{..}
 
-parseThrottleEvent = error "parseThrottleEvent"
-parseUnThrottleEvent = error "parseUnThrottleEvent"
+-- from <system include directory>/linux/perf_event.h
+-- Note: cannnot find corresponding entry in <perf source>/util/event.h
+
+-- struct {
+--      struct perf_event_header        header;
+--      u64                             time;
+--      u64                             id;
+--      u64                             stream_id;
+-- };
+
+parseThrottleEvent :: GetEvents EventPayload
+parseThrottleEvent = do
+   te_time <- getU64
+   te_id <- getU64
+   te_stream_id <- getU64
+   return ThrottleEvent{..}
+
+parseUnThrottleEvent :: GetEvents EventPayload
+parseUnThrottleEvent = do
+   ue_time <- getU64
+   ue_id <- getU64
+   ue_stream_id <- getU64
+   return UnThrottleEvent{..}
 
 -- from <perf source>/util/event.h
 --
@@ -333,7 +354,6 @@ parseUnThrottleEvent = error "parseUnThrottleEvent"
 --      u64 id;
 -- };
 
--- parseReadEvent = error "parseReadEvent"
 parseReadEvent :: GetEvents EventPayload
 parseReadEvent = do
    re_pid <- getU32

@@ -302,6 +302,19 @@ data EventPayload =
       se_cpu :: Maybe Word32,
       se_period :: Maybe Word64
    }
+   -- ThrottleEvent and UnThrottleEvent are mentioned in
+   -- <system include directory>/linux/perf_event.h
+   -- but does not appear in <perf source>/util/event.h
+   | ThrottleEvent {
+      te_time :: Word64,
+      te_id :: Word64,
+      te_stream_id :: Word64
+   }
+   | UnThrottleEvent {
+      ue_time :: Word64,
+      ue_id :: Word64,
+      ue_stream_id :: Word64
+   }
    deriving (Show)
 
 instance Pretty EventPayload where
@@ -341,3 +354,11 @@ instance Pretty EventPayload where
       text "streamid:" <+> pretty (se_streamid se) $$
       text "cpu:" <+> pretty (se_cpu se) $$
       text "period:" <+> pretty (se_period se)
+   pretty te@(ThrottleEvent {}) =
+      text "time:" <+> pretty (te_time te) $$
+      text "id:" <+> pretty (te_id te) $$
+      text "stream_id:" <+> pretty (te_stream_id te)
+   pretty ue@(UnThrottleEvent {}) =
+      text "time:" <+> pretty (ue_time ue) $$
+      text "id:" <+> pretty (ue_id ue) $$
+      text "stream_id:" <+> pretty (ue_stream_id ue)
