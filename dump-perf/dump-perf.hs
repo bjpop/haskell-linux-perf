@@ -61,6 +61,8 @@ dumper f = do
    printf "%s\n" $ render $ vcat $ Prelude.map prettyAttrAndIds $ Prelude.zip attrs idss
    -- we assume the sampleType comes from the first attr
    -- it is not clear what to do if there is more than one, or even if that is valid.
+   -- See: samplingType in perffile/session.c and the way it is set in the CERN readperf code.
+   -- They also assume there is just one sampleType.
    let sampleType =
           case attrs of
              [] -> 0 -- assume none of the sample types are set

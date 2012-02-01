@@ -382,6 +382,13 @@ parseSampleEvent sampleType = do
    se_period <- parseSampleType sampleType PERF_SAMPLE_PERIOD getU64
    return SampleEvent{..}
 
+-- XXX sample_id_all is not handled yet.
+-- if this flag is set to TRUE then events other than SampleEvent
+-- have additional information. See perf_event__parse_sample
+-- in cern_perf/readperf/origperf.c and also perf_event__parse_id_sample.
+-- We use ea_sample_type from EventAttr to determine what sampling
+-- information we have.
+
 parseEventPayload :: Word64 -> EventType -> GetEvents EventPayload
 parseEventPayload sampleType eventType =
    case eventType of
