@@ -59,6 +59,13 @@ dumper f = do
    separator
    let prettyAttrAndIds (attr, ids) = pretty attr $$ (text "ids:" <+> (hsep $ Prelude.map pretty ids))
    printf "%s\n" $ render $ vcat $ Prelude.map prettyAttrAndIds $ Prelude.zip attrs idss
+   types <- readEventTypes h header
+   separator
+   printf "Trace Event Types:\n"
+   printf "%s\n" $ render $ vcat $ Prelude.map pretty types
+
+   -- XXX need to read in the perf_trace_event_types which is an array found at fh_event_offset
+
    -- we assume the sampleType comes from the first attr
    -- it is not clear what to do if there is more than one, or even if that is valid.
    -- See: samplingType in perffile/session.c and the way it is set in the CERN readperf code.

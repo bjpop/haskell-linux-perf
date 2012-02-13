@@ -25,6 +25,7 @@ module Profiling.Linux.Perf.Types
    , EventHeader (..)
    , EventPayload (..)
    , SampleFormat (..)
+   , TraceEventType (..)
    )where
 
 import Data.Word
@@ -231,6 +232,16 @@ instance Pretty FileAttr where
       text "event attribute:" <+> pretty (fa_attr fa) $$
       text "ids offset:" <+> pretty (fa_ids_offset fa) $$
       text "ids size:" <+> pretty (fa_ids_size fa)
+
+data TraceEventType = TraceEventType {
+   te_event_id :: Word64, -- This entry belongs to the perf event attr entry where .config has the same value as this id. 
+   te_name :: ByteString
+}
+
+instance Pretty TraceEventType where
+   pretty te =
+      text "event id:" <+> pretty (te_event_id te) $$
+      text "name:" <+> pretty (te_name te)
 
 -- Corresponds with the perf_event_header struct in <perf source>/util/perf_event.h
 data EventHeader = EventHeader {

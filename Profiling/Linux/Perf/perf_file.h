@@ -30,3 +30,10 @@ struct perf_file_attr {
 	struct perf_event_attr	attr;
 	struct perf_file_section	ids;
 };
+
+#define MAX_EVENT_NAME 64
+
+struct perf_trace_event_type {
+        u64     event_id;
+        char    name[MAX_EVENT_NAME];
+};

@@ -20,6 +20,7 @@ module Profiling.Linux.Perf.Parse
    , readAttributeIDs
    , readEventHeader
    , readEvent
+   , readEventTypes
    , module Types
    ) where
 
@@ -223,6 +224,19 @@ parseFileAttr = do
   fa_attr <- parseEventAttr
   FileSection fa_ids_offset fa_ids_size <- parseFileSection
   return FileAttr{..}
+
+-- from <perf source>/util/event.h
+--
+-- struct perf_trace_event_type {
+--    u64  event_id;
+--    char name[MAX_EVENT_NAME];
+-- };
+
+parseTraceEventType :: GetEvents TraceEventType
+parseTraceEventType = do
+  te_event_id <- getU64
+  te_name <- getBSNul
+  return TraceEventType{..}
 
 -- from <system include directory>/linux/perf_event.h
 --
@@ -449,3 +463,10 @@ readAttributeIDs h attr = do
    hSeek h AbsoluteSeek offset
    b <- B.hGet h (size * bytesInWord64)
    runGetEventsCheck (replicateM size getU64) b
+
+readEventTypes :: Handle -> FileHeader -> IO [TraceEventType]
+readEventTypes h fh = do
+   let nr_types = fh_event_size fh `quot` (#size struct perf_trace_event_type)
+   hSeek h AbsoluteSeek (fromIntegral (fh_event_offset fh))
+   b <- B.hGet h (fromIntegral (fh_event_size fh))
+   runGetEventsCheck (replicateM (fromIntegral nr_types) parseTraceEventType) b
