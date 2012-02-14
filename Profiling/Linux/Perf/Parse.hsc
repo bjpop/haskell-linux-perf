@@ -415,6 +415,7 @@ parseEventPayload sampleType eventType =
       PERF_RECORD_FORK -> parseForkEvent
       PERF_RECORD_READ -> parseReadEvent
       PERF_RECORD_SAMPLE -> parseSampleEvent sampleType
+      PERF_RECORD_UNKNOWN _ -> return UnknownEvent
 
 parseEvent :: Word64 -> GetEvents Event
 parseEvent sampleType = do

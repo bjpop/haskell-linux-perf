@@ -96,6 +96,7 @@ data EventType -- perf_event_header->type
    | PERF_RECORD_FORK       -- 7
    | PERF_RECORD_READ       -- 8
    | PERF_RECORD_SAMPLE     -- 9
+   | PERF_RECORD_UNKNOWN Int  -- possibly a bad number?
    deriving (Eq, Show)
 
 instance Enum EventType where
@@ -109,7 +110,7 @@ instance Enum EventType where
    toEnum 7 = PERF_RECORD_FORK
    toEnum 8 = PERF_RECORD_READ
    toEnum 9 = PERF_RECORD_SAMPLE
-   toEnum other = error ("bad event type number: " ++ show other)
+   toEnum other = PERF_RECORD_UNKNOWN other
 
    fromEnum PERF_RECORD_MMAP = 1
    fromEnum PERF_RECORD_LOST = 2
@@ -120,6 +121,7 @@ instance Enum EventType where
    fromEnum PERF_RECORD_FORK = 7
    fromEnum PERF_RECORD_READ = 8
    fromEnum PERF_RECORD_SAMPLE = 9
+   fromEnum (PERF_RECORD_UNKNOWN other) = other
 
 instance Pretty EventType where
    pretty = text . show
@@ -327,6 +329,7 @@ data EventPayload =
       ue_id :: Word64,
       ue_stream_id :: Word64
    }
+   | UnknownEvent
    deriving (Show)
 
 instance Pretty EventPayload where
@@ -374,3 +377,4 @@ instance Pretty EventPayload where
       text "time:" <+> pretty (ue_time ue) $$
       text "id:" <+> pretty (ue_id ue) $$
       text "stream_id:" <+> pretty (ue_stream_id ue)
+   pretty UnknownEvent = text "Unknown"
