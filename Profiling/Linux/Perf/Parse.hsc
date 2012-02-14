@@ -464,9 +464,30 @@ readAttributeIDs h attr = do
    b <- B.hGet h (size * bytesInWord64)
    runGetEventsCheck (replicateM size getU64) b
 
+{-
 readEventTypes :: Handle -> FileHeader -> IO [TraceEventType]
 readEventTypes h fh = do
-   let nr_types = fh_event_size fh `quot` (#size struct perf_trace_event_type)
+   let sizeOfTypeRecord = #size struct perf_trace_event_type
+   let nr_types = fh_event_size fh `quot` sizeOfTypeRecord
    hSeek h AbsoluteSeek (fromIntegral (fh_event_offset fh))
    b <- B.hGet h (fromIntegral (fh_event_size fh))
    runGetEventsCheck (replicateM (fromIntegral nr_types) parseTraceEventType) b
+-}
+
+readEventTypes :: Handle -> FileHeader -> IO [TraceEventType]
+readEventTypes h fh = do
+   -- hSeek h AbsoluteSeek (fromIntegral (fh_event_offset fh))
+   -- b <- B.hGet h (fromIntegral (fh_event_size fh))
+   -- runGetEventsCheck (replicateM (fromIntegral nr_types) parseTraceEventType) b
+   hSeek h AbsoluteSeek (fromIntegral (fh_event_offset fh))
+   loop nr_types []
+   where
+   loop 0 acc = return $ reverse acc
+   loop n acc = do
+      -- hSeek h AbsoluteSeek offset
+      b <- B.hGet h sizeOfTypeRecord
+      nextRecord <- runGetEventsCheck parseTraceEventType b
+      loop (n-1) (nextRecord:acc)
+   sizeOfTypeRecord :: Int
+   sizeOfTypeRecord = fromIntegral (#size struct perf_trace_event_type)
+   nr_types = (fromIntegral $ fh_event_size fh) `quot` sizeOfTypeRecord

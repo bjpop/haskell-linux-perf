@@ -193,7 +193,7 @@ data EventAttr
    = EventAttr {
         ea_type :: Word32,   -- Major type: hardware/software/tracepoint/etc.
         ea_size :: Word32,   -- Size of the attr structure, for fwd/bwd compat.
-        ea_config :: Word64, -- Type specific configuration information.
+        ea_config :: Word64, -- Link to .event id of perf trace event type.
 
         -- number of events when a sample is generated if .freq
         -- is not set or frequency for sampling if .freq is set
@@ -234,7 +234,8 @@ instance Pretty FileAttr where
       text "ids size:" <+> pretty (fa_ids_size fa)
 
 data TraceEventType = TraceEventType {
-   te_event_id :: Word64, -- This entry belongs to the perf event attr entry where .config has the same value as this id. 
+   te_event_id :: Word64, -- This entry belongs to the perf event attr entry where .config
+                          -- has the same value as this id. 
    te_name :: ByteString
 }
 
