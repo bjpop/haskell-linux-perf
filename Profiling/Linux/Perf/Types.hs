@@ -329,7 +329,7 @@ data EventPayload =
       ue_id :: Word64,
       ue_stream_id :: Word64
    }
-   | UnknownEvent
+   | UnknownEvent -- Something to return if we find PERF_RECORD_UNKNOWN
    deriving (Show)
 
 instance Pretty EventPayload where
