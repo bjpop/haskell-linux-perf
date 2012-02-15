@@ -38,5 +38,7 @@ Executable dump-perf {
   hs-source-dirs: dump-perf
   Build-depends: linux-perf==0.1,
                  base==4.*,
-                 pretty==1.0.*
+                 pretty==1.0.*,
+                 containers==0.4.*,
+                 bytestring==0.9.*
 }

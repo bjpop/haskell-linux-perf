@@ -27,45 +27,35 @@ import System.Environment
 import Text.Printf
 import Text.PrettyPrint
 import Data.Word
+import Data.List (intersperse)
+import Data.Map as Map
+import Data.ByteString.Lazy (ByteString)
+
+data OutputStyle = Dump | Trace
+
+die :: String -> IO a
+die s = hPutStrLn stderr s >> exitWith (ExitFailure 1)
 
 main :: IO ()
 main = do
   args <- getArgs
-  file <- case args of
-            []     -> return "perf.data"
-            [file] -> return file
-            _      -> die "Syntax: dump-perf [file]"
-  dumper file
+  (outputStyle, file) <- case args of
+     []     -> return (Dump, "perf.data")
+     ["dump"] -> return (Dump, "perf.data")
+     ["trace"] -> return (Trace, "perf.data")
+     [file] -> return (Dump, file)
+     ["dump", file]  -> return (Dump, file)
+     ["trace", file] -> return (Trace, file)
+     _               -> die "Syntax: dump-perf [dump|trace] [file]"
+  display outputStyle file
 
-die s = do hPutStrLn stderr s; exitWith (ExitFailure 1)
-
-separator :: IO ()
-separator = printf "%s\n" $ Prelude.replicate 40 '-'
-
--- Read the contents of the perf.data file and pretty print it to
--- standard output.
-dumper :: FilePath -> IO ()
-dumper f = do
-   h <- openFile f ReadMode
+display :: OutputStyle -> FilePath -> IO ()
+display style file = do
+   h <- openFile file ReadMode
    header <- readHeader h
    attrs <- readAttributes h header
    idss <- mapM (readAttributeIDs h) attrs
-   separator
-   printf "Perf File Header:\n"
-   separator
-   printf "%s\n" $ prettyString header
-   separator
-   printf "Perf File Attributes:\n"
-   separator
-   let prettyAttrAndIds (attr, ids) = pretty attr $$ (text "ids:" <+> (hsep $ Prelude.map pretty ids))
-   printf "%s\n" $ render $ vcat $ Prelude.map prettyAttrAndIds $ Prelude.zip attrs idss
    types <- readEventTypes h header
-   separator
-   printf "Trace Event Types:\n"
-   printf "%s\n" $ render $ vcat $ Prelude.map pretty types
-
-   -- XXX need to read in the perf_trace_event_types which is an array found at fh_event_offset
-
    -- we assume the sampleType comes from the first attr
    -- it is not clear what to do if there is more than one, or even if that is valid.
    -- See: samplingType in perffile/session.c and the way it is set in the CERN readperf code.
@@ -76,19 +66,95 @@ dumper f = do
              firstAttr:_ -> ea_sample_type $ fa_attr $ firstAttr
        dataOffset = fh_data_offset header
        maxOffset = fh_data_size header + dataOffset
-   dumpEvents h maxOffset dataOffset sampleType
+   events <- readEvents h maxOffset dataOffset sampleType
+   putStrLn $ render $ case style of
+      Dump ->  dumper header attrs idss types events
+      Trace -> tracer header attrs idss types events
 
--- Read the stream of data samples and pretty print them to stdout.
-dumpEvents :: Handle -> Word64 -> Word64 -> Word64 -> IO ()
-dumpEvents h maxOffset offset sampleType
-   | offset >= maxOffset = return ()
-   | otherwise = do
-        event <- readEvent h offset sampleType
-        separator
-        printf "Perf Event:\n"
-        separator
-        printf "%s\n" $ prettyString event
-        -- Calculate the file offset for the next sample.
-        let size = eh_size $ ev_header event 
-            nextOffset = offset + fromIntegral size
-        dumpEvents h maxOffset nextOffset sampleType
+readEvents :: Handle -> Word64 -> Word64 -> Word64 -> IO [Event]
+readEvents h maxOffset offset sampleType =
+   readWorker offset []
+   where
+   readWorker :: Word64 -> [Event] -> IO [Event]
+   readWorker offset acc
+      | offset >= maxOffset = return $ reverse acc
+      | otherwise = do
+           event <- readEvent h offset sampleType
+           let size = eh_size $ ev_header event 
+               nextOffset = offset + fromIntegral size
+           readWorker nextOffset (event:acc)
+
+separator :: Doc
+separator = text $ Prelude.replicate 40 '-'
+
+dumper :: FileHeader -> [FileAttr] -> [[Word64]] -> [TraceEventType] -> [Event] -> Doc
+dumper header attrs idss types events =
+   vcat $ intersperse separator $
+      [ text "Perf File Header:"
+      , pretty header
+      , text "Perf File Attributes:"
+      , vcat $ intersperse separator $
+               Prelude.map prettyAttrAndIds $ Prelude.zip attrs idss
+      , text "Trace Event Types:"
+      , vcat $ Prelude.map pretty types
+      , text "Events:"
+      ] ++ Prelude.map pretty events
+   where
+   prettyAttrAndIds (attr, ids) =
+      pretty attr $$ (text "ids:" <+> (hsep $ Prelude.map pretty ids))
+
+tracer :: FileHeader -> [FileAttr] -> [[Word64]] -> [TraceEventType] -> [Event] -> Doc
+tracer header attrs idss types events =
+   vcat $ traceSamples Map.empty attrsMap $ Prelude.map ev_payload events
+   where
+   -- mapping from type id to type name
+   typesMap :: Map Word64 ByteString
+   typesMap = fromList typesIDsNames
+   typesIDsNames = Prelude.map (\t -> (te_event_id t, te_name t)) types
+   -- mapping from event id to type name
+   attrsMap :: Map Word64 ByteString
+   attrsMap = makeAttrsMap $ zip (Prelude.map fa_attr attrs) idss
+   makeAttrsMap :: [(EventAttr, [Word64])] -> Map Word64 ByteString
+   makeAttrsMap = foldr idsToName Map.empty
+   idsToName :: (EventAttr, [Word64]) -> Map Word64 ByteString -> Map Word64 ByteString
+   idsToName (attr, ids) result =
+      case Map.lookup (ea_config attr) typesMap of
+         Nothing -> result
+         Just name -> foldr (flip Map.insert name) result ids
+
+traceSamples :: Map Word32 ByteString -> Map Word64 ByteString -> [EventPayload] -> [Doc]
+traceSamples _pidMap _attrMap [] = []
+traceSamples pidMap attrMap (ce@CommEvent {} : rest) =
+   doc : traceSamples (insert pid command pidMap) attrMap rest
+   where
+   doc = text "command:" <+> pretty command <+>
+         text "pid:" <+> int (fromIntegral pid) <+>
+         text "thread:" <+> int (fromIntegral tid)
+   command = ce_comm ce
+   -- thread = int $ fromIntegral $ ce_tid ce
+   tid = ce_tid ce
+   pid = ce_pid ce
+traceSamples pidMap attrMap (se@SampleEvent {} : rest) =
+   doc : traceSamples pidMap attrMap rest
+   where
+   doc = processName <+> sampleType <+> timeStamp
+   processName =
+      case se_pid se of
+         Nothing -> text "unknown pid"
+         Just pid ->
+            case Map.lookup pid pidMap of
+               Nothing -> int $ fromIntegral pid
+               Just name -> pretty name
+   sampleType =
+      case se_id se of
+         Nothing -> text "unknown sample id"
+         Just sid ->
+            case Map.lookup sid attrMap of
+               Nothing -> int $ fromIntegral sid
+               Just name -> pretty name
+   timeStamp =
+      case se_time se of
+         Nothing -> text "uknown time"
+         Just time -> int $ fromIntegral time
+traceSamples pidMap attrMap (_otherSample : rest) =
+  traceSamples pidMap attrMap rest
