@@ -131,23 +131,15 @@ traceSamples idMap attrMap (ee@ExitEvent {} : rest) =
    doc : traceSamples idMap attrMap rest
    where
    doc = text "exit:" <+> parent <+> text "->" <+> child <+> timeStamp
-   ppid = prettyIntegral $ ee_ppid ee
-   ptid = prettyIntegral $ ee_ptid ee
-   pid = prettyIntegral $ ee_pid ee
-   tid = prettyIntegral $ ee_tid ee
-   parent = text "(" <> ppid <> text "," <> ptid <> text ")"
-   child = text "(" <> pid <> text "," <> tid <> text ")"
+   parent = pretty (ee_ppid ee, ee_ptid ee) 
+   child = pretty (ee_pid ee, ee_tid ee)
    timeStamp = prettyIntegral $ ee_time ee
 traceSamples idMap attrMap (fe@ForkEvent {} : rest) =
    doc : traceSamples idMap attrMap rest
    where
    doc = text "fork:" <+> parent <+> text "->" <+> child <+> timeStamp
-   ppid = prettyIntegral $ fe_ppid fe
-   ptid = prettyIntegral $ fe_ptid fe
-   pid = prettyIntegral $ fe_pid fe
-   tid = prettyIntegral $ fe_tid fe
-   parent = text "(" <> ppid <> text "," <> ptid <> text ")"
-   child = text "(" <> pid <> text "," <> tid <> text ")"
+   parent = pretty (fe_ppid fe, fe_ptid fe) 
+   child = pretty (fe_pid fe, fe_tid fe)
    timeStamp = prettyIntegral $ fe_time fe
 traceSamples idMap attrMap (ce@CommEvent {} : rest) =
    doc : traceSamples (insert (pid,tid) command idMap) attrMap rest
@@ -169,7 +161,8 @@ traceSamples idMap attrMap (se@SampleEvent {} : rest) =
          (_, Nothing) -> text "unknown tid"
          (Just pid, Just tid) ->
             case Map.lookup (pid, tid) idMap of
-               Nothing -> text "(" <> prettyIntegral pid <> text "," <> prettyIntegral tid <> text ")"
+               -- Nothing -> text "(" <> prettyIntegral pid <> text "," <> prettyIntegral tid <> text ")"
+               Nothing -> pretty (pid, tid) 
                Just name -> pretty name
    sampleType =
       case se_id se of

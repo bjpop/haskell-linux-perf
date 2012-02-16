@@ -58,6 +58,9 @@ instance Pretty Word32 where
 instance Pretty Word64 where
    pretty = integer . fromIntegral
 
+instance (Pretty a, Pretty b) => Pretty (a, b) where
+   pretty (x, y) = text "(" <> pretty x <> text "," <+> pretty y <> text ")"
+
 instance Pretty ByteString where
    pretty = text . unpackAsChars
       where
