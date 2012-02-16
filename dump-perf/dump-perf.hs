@@ -122,39 +122,65 @@ tracer header attrs idss types events =
          Nothing -> result
          Just name -> foldr (flip Map.insert name) result ids
 
-traceSamples :: Map Word32 ByteString -> Map Word64 ByteString -> [EventPayload] -> [Doc]
-traceSamples _pidMap _attrMap [] = []
-traceSamples pidMap attrMap (ce@CommEvent {} : rest) =
-   doc : traceSamples (insert pid command pidMap) attrMap rest
+prettyIntegral :: Integral a => a -> Doc
+prettyIntegral = int . fromIntegral
+
+traceSamples :: Map (Word32, Word32) ByteString -> Map Word64 ByteString -> [EventPayload] -> [Doc]
+traceSamples _idMap _attrMap [] = []
+traceSamples idMap attrMap (ee@ExitEvent {} : rest) =
+   doc : traceSamples idMap attrMap rest
+   where
+   doc = text "exit:" <+> parent <+> text "->" <+> child <+> timeStamp
+   ppid = prettyIntegral $ ee_ppid ee
+   ptid = prettyIntegral $ ee_ptid ee
+   pid = prettyIntegral $ ee_pid ee
+   tid = prettyIntegral $ ee_tid ee
+   parent = text "(" <> ppid <> text "," <> ptid <> text ")"
+   child = text "(" <> pid <> text "," <> tid <> text ")"
+   timeStamp = prettyIntegral $ ee_time ee
+traceSamples idMap attrMap (fe@ForkEvent {} : rest) =
+   doc : traceSamples idMap attrMap rest
+   where
+   doc = text "fork:" <+> parent <+> text "->" <+> child <+> timeStamp
+   ppid = prettyIntegral $ fe_ppid fe
+   ptid = prettyIntegral $ fe_ptid fe
+   pid = prettyIntegral $ fe_pid fe
+   tid = prettyIntegral $ fe_tid fe
+   parent = text "(" <> ppid <> text "," <> ptid <> text ")"
+   child = text "(" <> pid <> text "," <> tid <> text ")"
+   timeStamp = prettyIntegral $ fe_time fe
+traceSamples idMap attrMap (ce@CommEvent {} : rest) =
+   doc : traceSamples (insert (pid,tid) command idMap) attrMap rest
    where
    doc = text "command:" <+> pretty command <+>
-         text "pid:" <+> int (fromIntegral pid) <+>
-         text "thread:" <+> int (fromIntegral tid)
+         text "pid:" <+> prettyIntegral pid <+>
+         text "tid:" <+> prettyIntegral tid
    command = ce_comm ce
-   -- thread = int $ fromIntegral $ ce_tid ce
    tid = ce_tid ce
    pid = ce_pid ce
-traceSamples pidMap attrMap (se@SampleEvent {} : rest) =
-   doc : traceSamples pidMap attrMap rest
+traceSamples idMap attrMap (se@SampleEvent {} : rest) =
+   doc : traceSamples idMap attrMap rest
    where
    doc = processName <+> sampleType <+> timeStamp
    processName =
-      case se_pid se of
-         Nothing -> text "unknown pid"
-         Just pid ->
-            case Map.lookup pid pidMap of
-               Nothing -> int $ fromIntegral pid
+      case (se_pid se, se_tid se) of
+         (Nothing, Nothing) -> text "unknown (pid, tid)"
+         (Nothing, _) -> text "unknown pid"
+         (_, Nothing) -> text "unknown tid"
+         (Just pid, Just tid) ->
+            case Map.lookup (pid, tid) idMap of
+               Nothing -> text "(" <> prettyIntegral pid <> text "," <> prettyIntegral tid <> text ")"
                Just name -> pretty name
    sampleType =
       case se_id se of
          Nothing -> text "unknown sample id"
          Just sid ->
             case Map.lookup sid attrMap of
-               Nothing -> int $ fromIntegral sid
+               Nothing -> prettyIntegral sid
                Just name -> pretty name
    timeStamp =
       case se_time se of
          Nothing -> text "uknown time"
-         Just time -> int $ fromIntegral time
-traceSamples pidMap attrMap (_otherSample : rest) =
-  traceSamples pidMap attrMap rest
+         Just time -> prettyIntegral time
+traceSamples idMap attrMap (_otherSample : rest) =
+  traceSamples idMap attrMap rest
