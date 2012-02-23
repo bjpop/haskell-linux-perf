@@ -462,8 +462,9 @@ readAttributeIDs h attr = do
    let offset = fromIntegral $ fa_ids_offset attr
        size = fromIntegral $ fa_ids_size attr
    hSeek h AbsoluteSeek offset
-   b <- B.hGet h (size * bytesInWord64)
-   runGetEventsCheck (replicateM size getU64) b
+   -- b <- B.hGet h (size * bytesInWord64)
+   b <- B.hGet h size
+   runGetEventsCheck (replicateM (size `div` bytesInWord64) getU64) b
 
 {-
 readEventTypes :: Handle -> FileHeader -> IO [TraceEventType]
