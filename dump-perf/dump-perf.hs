@@ -27,8 +27,8 @@ import System.Environment
 import Text.Printf
 import Text.PrettyPrint
 import Data.Word
-import Data.List (intersperse)
-import Data.Map as Map
+import Data.List (intersperse, sortBy)
+import Data.Map as Map hiding (map, filter)
 import Data.ByteString.Lazy (ByteString)
 
 data OutputStyle = Dump | Trace
@@ -105,7 +105,7 @@ dumper header attrs idss types events =
 
 tracer :: FileHeader -> [FileAttr] -> [[Word64]] -> [TraceEventType] -> [Event] -> Doc
 tracer header attrs idss types events =
-   vcat $ traceSamples Map.empty attrsMap $ Prelude.map ev_payload events
+   vcat $ traceSamples Map.empty attrsMap $ sortBy compareSamplePayload $ Prelude.map ev_payload events
    where
    -- mapping from type id to type name
    typesMap :: Map Word64 ByteString
@@ -177,3 +177,18 @@ traceSamples idMap attrMap (se@SampleEvent {} : rest) =
          Just time -> prettyIntegral time
 traceSamples idMap attrMap (_otherSample : rest) =
   traceSamples idMap attrMap rest
+
+isSampleEvent :: EventPayload -> Bool
+isSampleEvent (SampleEvent {}) = True
+isSampleEvent _other = False
+
+getEventTime :: EventPayload -> Word64
+getEventTime e@(SampleEvent {}) = maybe 0 id $ se_time e
+getEventTime e@(ForkEvent {}) = fe_time e
+getEventTime e@(ExitEvent {}) = ee_time e
+getEventTime e@(ThrottleEvent {}) = te_time e
+getEventTime e@(UnThrottleEvent {}) = ue_time e
+getEventTime other = 0
+
+compareSamplePayload :: EventPayload -> EventPayload -> Ordering
+compareSamplePayload e1 e2 = compare (getEventTime e1) (getEventTime e2)
