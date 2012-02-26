@@ -25,7 +25,7 @@ import System.Exit
 import System.IO
 import System.Environment
 import Text.Printf
-import Text.PrettyPrint
+import Text.PrettyPrint as Pretty
 import Data.Word
 import Data.List (intersperse, sortBy)
 import Data.Map as Map hiding (map, filter)
@@ -49,6 +49,8 @@ main = do
      _               -> die "Syntax: dump-perf [dump|trace] [file]"
   display outputStyle file
 
+-- read the contents of the perf.data file and render it
+-- on stdout in a specified style.
 display :: OutputStyle -> FilePath -> IO ()
 display style file = do
    h <- openFile file ReadMode
@@ -71,6 +73,8 @@ display style file = do
       Dump ->  dumper header attrs idss types events
       Trace -> tracer header attrs idss types events
 
+-- read the events from file and return them in the order that they appear
+-- (not sorted on timestamp).
 readEvents :: Handle -> Word64 -> Word64 -> Word64 -> IO [Event]
 readEvents h maxOffset offset sampleType =
    readWorker offset []
@@ -87,6 +91,7 @@ readEvents h maxOffset offset sampleType =
 separator :: Doc
 separator = text $ Prelude.replicate 40 '-'
 
+-- Dump the events in a sequence, showing all their internal values.
 dumper :: FileHeader -> [FileAttr] -> [[Word64]] -> [TraceEventType] -> [Event] -> Doc
 dumper header attrs idss types events =
    vcat $ intersperse separator $
@@ -103,9 +108,13 @@ dumper header attrs idss types events =
    prettyAttrAndIds (attr, ids) =
       pretty attr $$ (text "ids:" <+> (hsep $ Prelude.map pretty ids))
 
+-- Pretty print the events in sorted timestamp order, mapping events to their
+-- types and PIDs to their command names.
 tracer :: FileHeader -> [FileAttr] -> [[Word64]] -> [TraceEventType] -> [Event] -> Doc
 tracer header attrs idss types events =
-   vcat $ traceSamples Map.empty attrsMap $ sortBy compareSamplePayload $ Prelude.map ev_payload events
+   vcat $ traceSamples Map.empty attrsMap
+        $ sortBy compareSamplePayload
+        $ Prelude.map ev_payload events
    where
    -- mapping from type id to type name
    typesMap :: Map Word64 ByteString
@@ -142,18 +151,21 @@ traceSamples idMap attrMap (fe@ForkEvent {} : rest) =
    child = pretty (fe_pid fe, fe_tid fe)
    timeStamp = prettyIntegral $ fe_time fe
 traceSamples idMap attrMap (ce@CommEvent {} : rest) =
-   doc : traceSamples (insert (pid,tid) command idMap) attrMap rest
+   -- doc : traceSamples (insert (pid,tid) command idMap) attrMap rest
+   traceSamples (insert (pid,tid) command idMap) attrMap rest
    where
+{-
    doc = text "command:" <+> pretty command <+>
          text "pid:" <+> prettyIntegral pid <+>
          text "tid:" <+> prettyIntegral tid
+-}
    command = ce_comm ce
    tid = ce_tid ce
    pid = ce_pid ce
 traceSamples idMap attrMap (se@SampleEvent {} : rest) =
    doc : traceSamples idMap attrMap rest
    where
-   doc = processName <+> sampleType <+> timeStamp
+   doc = processName <+> pid <+> cpu <+> sampleType <+> timeStamp
    processName =
       case (se_pid se, se_tid se) of
          (Nothing, Nothing) -> text "unknown (pid, tid)"
@@ -161,7 +173,6 @@ traceSamples idMap attrMap (se@SampleEvent {} : rest) =
          (_, Nothing) -> text "unknown tid"
          (Just pid, Just tid) ->
             case Map.lookup (pid, tid) idMap of
-               -- Nothing -> text "(" <> prettyIntegral pid <> text "," <> prettyIntegral tid <> text ")"
                Nothing -> pretty (pid, tid) 
                Just name -> pretty name
    sampleType =
@@ -171,10 +182,9 @@ traceSamples idMap attrMap (se@SampleEvent {} : rest) =
             case Map.lookup sid attrMap of
                Nothing -> prettyIntegral sid
                Just name -> pretty name
-   timeStamp =
-      case se_time se of
-         Nothing -> text "uknown time"
-         Just time -> prettyIntegral time
+   timeStamp = maybe Pretty.empty prettyIntegral $ se_time se
+   cpu = text "cpu=" <> (maybe Pretty.empty prettyIntegral $ se_cpu se)
+   pid = text "pid=" <> (maybe Pretty.empty prettyIntegral $ se_pid se)
 traceSamples idMap attrMap (_otherSample : rest) =
   traceSamples idMap attrMap rest
 
@@ -182,6 +192,8 @@ isSampleEvent :: EventPayload -> Bool
 isSampleEvent (SampleEvent {}) = True
 isSampleEvent _other = False
 
+-- Get the timestamp of an event if it has one, otherwise
+-- set it to 0 (for the purposes of sorting them).
 getEventTime :: EventPayload -> Word64
 getEventTime e@(SampleEvent {}) = maybe 0 id $ se_time e
 getEventTime e@(ForkEvent {}) = fe_time e
@@ -190,5 +202,6 @@ getEventTime e@(ThrottleEvent {}) = te_time e
 getEventTime e@(UnThrottleEvent {}) = ue_time e
 getEventTime other = 0
 
+-- Compare two events based on their timestamp.
 compareSamplePayload :: EventPayload -> EventPayload -> Ordering
 compareSamplePayload e1 e2 = compare (getEventTime e1) (getEventTime e2)
