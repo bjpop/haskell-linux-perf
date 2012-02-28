@@ -22,7 +22,8 @@ Library
                  binary==0.5.*,
                  mtl==1.1.*,
                  bytestring==0.9.*,
-                 pretty==1.0.*
+                 pretty==1.0.*,
+                 containers==0.4.*
   
   include-dirs: Profiling/Linux/Perf
 
@@ -38,7 +39,5 @@ Executable dump-perf {
   hs-source-dirs: dump-perf
   Build-depends: linux-perf==0.1,
                  base==4.*,
-                 pretty==1.0.*,
-                 containers==0.4.*,
                  bytestring==0.9.*
 }
