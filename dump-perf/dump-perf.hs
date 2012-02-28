@@ -48,16 +48,23 @@ main = do
      ["dump", file]  -> return (Dump, file)
      ["trace", file] -> return (Trace, file)
      _               -> die "Syntax: dump-perf [dump|trace] [file]"
-  display outputStyle file
+  readAndDisplay outputStyle file
 
 -- bit position of sample_id_all in the flags part of event_attr
 sampleIdAllPos :: Int
 sampleIdAllPos = 18
 
+-- The various parts of the perf.data file collected together
+type PerfFileContents = (FileHeader, [FileAttr], [[Word64]], [TraceEventType], [Event])
+
 -- read the contents of the perf.data file and render it
 -- on stdout in a specified style.
-display :: OutputStyle -> FilePath -> IO ()
-display style file = do
+readAndDisplay :: OutputStyle -> FilePath -> IO ()
+readAndDisplay style file = display style =<< readPerfData file
+
+-- Read and parse the perf.data file into its constituent components
+readPerfData :: FilePath -> IO PerfFileContents
+readPerfData file = do
    h <- openFile file ReadMode
    header <- readHeader h
    attrs <- readAttributes h header
@@ -66,11 +73,15 @@ display style file = do
    let (sampleType, sampleIdAll) = getSampleTypeAndIdAll attrs
        dataOffset = fh_data_offset header
        maxOffset = fh_data_size header + dataOffset
-   putStrLn $ "SampleIdAll = " ++ show sampleIdAll
    events <- readEvents h maxOffset dataOffset sampleType
+   return (header, attrs, idss, types, events)
+
+-- Render the components of the perf.data file under the specified style
+display :: OutputStyle -> PerfFileContents -> IO () 
+display style contents = do
    putStrLn $ render $ case style of
-      Dump ->  dumper header attrs idss types events
-      Trace -> tracer header attrs idss types events
+      Dump ->  dumper contents
+      Trace -> tracer contents
 
 -- we assume the sampleType comes from the first attr
 -- it is not clear what to do if there is more than one, or even if that is valid.
@@ -98,12 +109,9 @@ readEvents h maxOffset offset sampleType =
                nextOffset = offset + fromIntegral size
            readWorker nextOffset (event:acc)
 
-separator :: Doc
-separator = text $ replicate 40 '-'
-
 -- Dump the events in a sequence, showing all their internal values.
-dumper :: FileHeader -> [FileAttr] -> [[Word64]] -> [TraceEventType] -> [Event] -> Doc
-dumper header attrs idss types events =
+dumper :: PerfFileContents -> Doc
+dumper (header, attrs, idss, types, events) =
    vcat $ intersperse separator $
       [ text "Perf File Header:"
       , pretty header
@@ -117,11 +125,13 @@ dumper header attrs idss types events =
    where
    prettyAttrAndIds (attr, ids) =
       pretty attr $$ (text "ids:" <+> (hsep $ map pretty ids))
+   separator :: Doc
+   separator = text $ replicate 40 '-'
 
 -- Pretty print the events in sorted timestamp order, mapping events to their
 -- types and PIDs to their command names.
-tracer :: FileHeader -> [FileAttr] -> [[Word64]] -> [TraceEventType] -> [Event] -> Doc
-tracer header attrs idss types events =
+tracer :: PerfFileContents -> Doc
+tracer (header, attrs, idss, types, events) =
    vcat $ traceSamples Map.empty attrsMap
         $ sortBy compareSamplePayload
         $ map ev_payload events
