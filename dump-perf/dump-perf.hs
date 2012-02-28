@@ -13,7 +13,7 @@
 -- The main use of this program is to demonstrate how to use the
 -- Profilinf.Linux.Perf library.
 --
--- Usage: dump-perf <filename>
+-- Usage: dump-perf <dump|trace> <filename>
 --
 -- If filename is missing then it will assume the input is "perf.data" in
 -- the current working directory.
@@ -30,6 +30,7 @@ import Data.Word
 import Data.List (intersperse, sortBy)
 import Data.Map as Map hiding (map, filter)
 import Data.ByteString.Lazy (ByteString)
+import Data.Bits (testBit)
 
 data OutputStyle = Dump | Trace
 
@@ -49,6 +50,10 @@ main = do
      _               -> die "Syntax: dump-perf [dump|trace] [file]"
   display outputStyle file
 
+-- bit position of sample_id_all in the flags part of event_attr
+sampleIdAllPos :: Int
+sampleIdAllPos = 18
+
 -- read the contents of the perf.data file and render it
 -- on stdout in a specified style.
 display :: OutputStyle -> FilePath -> IO ()
@@ -62,12 +67,15 @@ display style file = do
    -- it is not clear what to do if there is more than one, or even if that is valid.
    -- See: samplingType in perffile/session.c and the way it is set in the CERN readperf code.
    -- They also assume there is just one sampleType.
-   let sampleType =
+   let (sampleType, sampleIdAll)  =
           case attrs of
-             [] -> 0 -- assume none of the sample types are set
-             firstAttr:_ -> ea_sample_type $ fa_attr $ firstAttr
+             [] -> (0, False) -- assume none of the sample types are set
+             firstAttr:_ ->
+                let attr = fa_attr $ firstAttr in
+                   (ea_sample_type attr, testBit (ea_flags attr) sampleIdAllPos)
        dataOffset = fh_data_offset header
        maxOffset = fh_data_size header + dataOffset
+   putStrLn $ "SampleIdAll = " ++ show sampleIdAll
    events <- readEvents h maxOffset dataOffset sampleType
    putStrLn $ render $ case style of
       Dump ->  dumper header attrs idss types events
