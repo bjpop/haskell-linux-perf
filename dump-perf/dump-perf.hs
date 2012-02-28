@@ -28,7 +28,7 @@ import Text.Printf
 import Text.PrettyPrint as Pretty
 import Data.Word
 import Data.List (intersperse, sortBy)
-import Data.Map as Map hiding (map, filter)
+import Data.Map as Map hiding (map, filter, null)
 import Data.ByteString.Lazy (ByteString)
 import Data.Bits (testBit)
 
@@ -63,16 +63,7 @@ display style file = do
    attrs <- readAttributes h header
    idss <- mapM (readAttributeIDs h) attrs
    types <- readEventTypes h header
-   -- we assume the sampleType comes from the first attr
-   -- it is not clear what to do if there is more than one, or even if that is valid.
-   -- See: samplingType in perffile/session.c and the way it is set in the CERN readperf code.
-   -- They also assume there is just one sampleType.
-   let (sampleType, sampleIdAll)  =
-          case attrs of
-             [] -> (0, False) -- assume none of the sample types are set
-             firstAttr:_ ->
-                let attr = fa_attr $ firstAttr in
-                   (ea_sample_type attr, testBit (ea_flags attr) sampleIdAllPos)
+   let (sampleType, sampleIdAll) = getSampleTypeAndIdAll attrs
        dataOffset = fh_data_offset header
        maxOffset = fh_data_size header + dataOffset
    putStrLn $ "SampleIdAll = " ++ show sampleIdAll
@@ -80,6 +71,17 @@ display style file = do
    putStrLn $ render $ case style of
       Dump ->  dumper header attrs idss types events
       Trace -> tracer header attrs idss types events
+
+-- we assume the sampleType comes from the first attr
+-- it is not clear what to do if there is more than one, or even if that is valid.
+-- See: samplingType in perffile/session.c and the way it is set in the CERN readperf code.
+-- They also assume there is just one sampleType.
+getSampleTypeAndIdAll :: [FileAttr] -> (Word64, Bool)
+getSampleTypeAndIdAll attrs
+   | null attrs = (0, False) -- assume none of the sample types are set
+   | otherwise = (ea_sample_type attr, testBit (ea_flags attr) sampleIdAllPos)
+   where
+   attr = fa_attr $ head attrs
 
 -- read the events from file and return them in the order that they appear
 -- (not sorted on timestamp).
@@ -97,7 +99,7 @@ readEvents h maxOffset offset sampleType =
            readWorker nextOffset (event:acc)
 
 separator :: Doc
-separator = text $ Prelude.replicate 40 '-'
+separator = text $ replicate 40 '-'
 
 -- Dump the events in a sequence, showing all their internal values.
 dumper :: FileHeader -> [FileAttr] -> [[Word64]] -> [TraceEventType] -> [Event] -> Doc
@@ -107,14 +109,14 @@ dumper header attrs idss types events =
       , pretty header
       , text "Perf File Attributes:"
       , vcat $ intersperse separator $
-               Prelude.map prettyAttrAndIds $ Prelude.zip attrs idss
+               map prettyAttrAndIds $ zip attrs idss
       , text "Trace Event Types:"
-      , vcat $ Prelude.map pretty types
+      , vcat $ map pretty types
       , text "Events:"
-      ] ++ Prelude.map pretty events
+      ] ++ map pretty events
    where
    prettyAttrAndIds (attr, ids) =
-      pretty attr $$ (text "ids:" <+> (hsep $ Prelude.map pretty ids))
+      pretty attr $$ (text "ids:" <+> (hsep $ map pretty ids))
 
 -- Pretty print the events in sorted timestamp order, mapping events to their
 -- types and PIDs to their command names.
@@ -122,15 +124,15 @@ tracer :: FileHeader -> [FileAttr] -> [[Word64]] -> [TraceEventType] -> [Event] 
 tracer header attrs idss types events =
    vcat $ traceSamples Map.empty attrsMap
         $ sortBy compareSamplePayload
-        $ Prelude.map ev_payload events
+        $ map ev_payload events
    where
    -- mapping from type id to type name
    typesMap :: Map Word64 ByteString
    typesMap = fromList typesIDsNames
-   typesIDsNames = Prelude.map (\t -> (te_event_id t, te_name t)) types
+   typesIDsNames = map (\t -> (te_event_id t, te_name t)) types
    -- mapping from event id to type name
    attrsMap :: Map Word64 ByteString
-   attrsMap = makeAttrsMap $ zip (Prelude.map fa_attr attrs) idss
+   attrsMap = makeAttrsMap $ zip (map fa_attr attrs) idss
    makeAttrsMap :: [(EventAttr, [Word64])] -> Map Word64 ByteString
    makeAttrsMap = foldr idsToName Map.empty
    idsToName :: (EventAttr, [Word64]) -> Map Word64 ByteString -> Map Word64 ByteString
