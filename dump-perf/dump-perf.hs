@@ -13,7 +13,7 @@
 -- The main use of this program is to demonstrate how to use the
 -- Profilinf.Linux.Perf library.
 --
--- Usage: dump-perf <dump|trace> <filename>
+-- Usage: dump-perf [--dump|--trace] [file]
 --
 -- If filename is missing then it will assume the input is "perf.data" in
 -- the current working directory.
@@ -32,11 +32,11 @@ main :: IO ()
 main = do
   args <- getArgs
   (outputStyle, file) <- case args of
-     []     -> return (Dump, "perf.data")
-     ["dump"] -> return (Dump, "perf.data")
-     ["trace"] -> return (Trace, "perf.data")
+     []        -> return (Dump, "perf.data")
+     ["--dump"]  -> return (Dump, "perf.data")
+     ["--trace"] -> return (Trace, "perf.data")
      [file] -> return (Dump, file)
-     ["dump", file]  -> return (Dump, file)
-     ["trace", file] -> return (Trace, file)
-     _               -> die "Syntax: dump-perf [dump|trace] [file]"
+     ["--dump", file]  -> return (Dump, file)
+     ["--trace", file] -> return (Trace, file)
+     _               -> die "Syntax: dump-perf [--dump|--trace] [file]"
   readAndDisplay outputStyle file

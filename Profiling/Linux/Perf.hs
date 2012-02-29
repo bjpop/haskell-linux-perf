@@ -30,15 +30,16 @@ module Profiling.Linux.Perf
    ) where
 
 import Profiling.Linux.Perf.Parse
-
--- import Text.Printf
+   ( FileHeader (..), FileAttr (..), TraceEventType (..), Event (..),  EventPayload (..), EventHeader (..)
+   , EventAttr (..), readHeader, readAttributes, readAttributeIDs, readEventTypes, readEvent, pretty )
 import Text.PrettyPrint as Pretty
-import Data.Word
+   ( render, Doc, empty, text, (<+>), (<>), vcat, ($$), int, hsep )
+import Data.Word (Word64, Word32)
 import Data.List (intersperse, sortBy)
 import Data.Map as Map hiding (map, filter, null)
 import Data.ByteString.Lazy (ByteString)
 import Data.Bits (testBit)
-import System.IO
+import System.IO (openFile, IOMode(ReadMode), Handle)
 
 data OutputStyle = Dump | Trace
 
