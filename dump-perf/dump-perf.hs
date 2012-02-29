@@ -18,6 +18,8 @@
 -- If filename is missing then it will assume the input is "perf.data" in
 -- the current working directory.
 --
+-- If the dump/trace flag is missing then it will assume dump.
+--
 -----------------------------------------------------------------------------
 
 import Profiling.Linux.Perf (OutputStyle (..), readAndDisplay)
