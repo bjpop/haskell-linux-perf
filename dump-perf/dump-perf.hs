@@ -32,11 +32,11 @@ main :: IO ()
 main = do
   args <- getArgs
   (outputStyle, file) <- case args of
-     []        -> return (Dump, "perf.data")
+     []          -> return (Dump, "perf.data")
      ["--dump"]  -> return (Dump, "perf.data")
      ["--trace"] -> return (Trace, "perf.data")
      [file] -> return (Dump, file)
      ["--dump", file]  -> return (Dump, file)
      ["--trace", file] -> return (Trace, file)
-     _               -> die "Syntax: dump-perf [--dump|--trace] [file]"
+     _                 -> die "Syntax: dump-perf [--dump|--trace] [file]"
   readAndDisplay outputStyle file
