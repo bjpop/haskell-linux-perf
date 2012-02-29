@@ -28,9 +28,9 @@ module Profiling.Linux.Perf.Types
    , TraceEventType (..)
    )where
 
-import Data.Word
+import Data.Word (Word64, Word32, Word16, Word8, Word)
 import Data.Char (chr)
-import Text.PrettyPrint
+import Text.PrettyPrint (text, (<+>), ($$), render, empty, integer, (<>), hsep, Doc)
 import Data.ByteString.Lazy (ByteString, unpack)
 
 -- -----------------------------------------------------------------------------
