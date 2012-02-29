@@ -25,15 +25,15 @@ module Profiling.Linux.Perf.Parse
    ) where
 
 import Profiling.Linux.Perf.Types as Types
-import Data.Word
-import Data.Binary
-import Control.Monad.Error
-import System.IO
+   ( FileSection (..), FileHeader (..), EventAttr (..), FileAttr (..), TraceEventType (..)
+   , EventHeader (..), EventPayload (..), SampleFormat (..), EventType (..), Event (..), Pretty (..) )
+import Data.Word (Word64, Word8, Word16, Word32)
+import Data.Binary (Binary (..), getWord8)
+import Control.Monad.Error (ErrorT (..), lift, replicateM, when, throwError )
+import System.IO (hSeek, Handle, SeekMode (..))
 import Data.ByteString.Lazy as B (ByteString, hGet)
 import Data.Binary.Get
    (Get, runGet, getLazyByteStringNul, getWord16le, getWord32le, getWord64le)
-import Debug.Trace
-import Text.Printf
 import Data.Bits (testBit)
 import Foreign.Storable (sizeOf)
 
