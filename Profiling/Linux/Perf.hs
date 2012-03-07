@@ -31,14 +31,15 @@ module Profiling.Linux.Perf
 
 import Profiling.Linux.Perf.Parse
    ( FileHeader (..), FileAttr (..), TraceEventType (..), Event (..),  EventPayload (..), EventHeader (..)
-   , EventAttr (..), readHeader, readAttributes, readAttributeIDs, readEventTypes, readEvent, pretty )
+   , EventAttr (..), readHeader, readAttributes, readAttributeIDs, readEventTypes, readEvent )
+import Profiling.Linux.Perf.Pretty ( pretty )
 import Text.PrettyPrint as Pretty
    ( render, Doc, empty, text, (<+>), (<>), vcat, ($$), int, hsep )
 import Data.Word (Word64, Word32)
 import Data.List (intersperse, sortBy)
 import Data.Map as Map hiding (map, filter, null)
 import Data.ByteString.Lazy (ByteString)
-import Data.Bits (testBit)
+import Data.Bits (testBit, bitSize, Bits)
 import System.IO (openFile, IOMode(ReadMode), Handle)
 
 data OutputStyle = Dump | Trace
@@ -63,9 +64,18 @@ readPerfData file = do
    attrs <- readAttributes h header
    idss <- mapM (readAttributeIDs h) attrs
    types <- readEventTypes h header
-   let (sampleType, sampleIdAll) = getSampleTypeAndIdAll attrs
+   -- let (sampleType, sampleIdAll) = getSampleTypeAndIdAll attrs
+   -- it is not clear what to do if there is more than one, or even if that is valid.
+   -- See: samplingType in perffile/session.c and the way it is set in the CERN readperf code.
+   -- They also assume there is just one sampleType.
+   let attrTypeInfo = getAttrInfo attrs
+       (sampleType, sampleIdAll) =
+          case attrTypeInfo of
+             []  -> (0, False)
+             x:_ -> x
        dataOffset = fh_data_offset header
        maxOffset = fh_data_size header + dataOffset
+   -- print attrTypeInfo
    events <- readEvents h maxOffset dataOffset sampleType
    return (header, attrs, idss, types, events)
 
@@ -76,16 +86,15 @@ display style contents = do
       Dump ->  dumper contents
       Trace -> tracer contents
 
--- we assume the sampleType comes from the first attr
--- it is not clear what to do if there is more than one, or even if that is valid.
--- See: samplingType in perffile/session.c and the way it is set in the CERN readperf code.
--- They also assume there is just one sampleType.
-getSampleTypeAndIdAll :: [FileAttr] -> (Word64, Bool)
-getSampleTypeAndIdAll attrs
-   | null attrs = (0, False) -- assume none of the sample types are set
-   | otherwise = (ea_sample_type attr, testBit (ea_flags attr) sampleIdAllPos)
+-- Get the Sample Type and test the sample_id_all bit in the flags field
+getAttrInfo :: [FileAttr] -> [(Word64, Bool)]
+getAttrInfo = map getSampleTypeAndIdAll
    where
-   attr = fa_attr $ head attrs
+   getSampleTypeAndIdAll :: FileAttr -> (Word64, Bool)
+   getSampleTypeAndIdAll fattr
+      = (ea_sample_type attr, testBit (ea_flags attr) sampleIdAllPos)
+      where
+      attr = fa_attr $ fattr
 
 -- read the events from file and return them in the order that they appear
 -- (not sorted on timestamp).
@@ -218,3 +227,12 @@ getEventTime other = 0
 -- Compare two events based on their timestamp.
 compareSamplePayload :: EventPayload -> EventPayload -> Ordering
 compareSamplePayload e1 e2 = compare (getEventTime e1) (getEventTime e2)
+
+bits :: Bits a => a -> [Bool]
+bits x = map (testBit x) [0 .. bitSize x - 1]
+
+showBits :: Bits a => a -> String
+showBits = map toBit . bits
+   where
+   toBit True  = '1'
+   toBit False = '0'

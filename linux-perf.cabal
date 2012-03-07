@@ -15,7 +15,8 @@ Library
   -- Modules exported by the library.
   Exposed-modules: Profiling.Linux.Perf,
                    Profiling.Linux.Perf.Types,
-                   Profiling.Linux.Perf.Parse
+                   Profiling.Linux.Perf.Parse,
+                   Profiling.Linux.Perf.Pretty
   
   -- Packages needed in order to build this package.
   Build-depends: base==4.*,

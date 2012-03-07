@@ -13,9 +13,7 @@
 -----------------------------------------------------------------------------
 
 module Profiling.Linux.Perf.Types 
-   ( Pretty (..)
-   , prettyString
-   , Event (..)
+   ( Event (..)
    , EventType (..)
    , EventCPUMode (..)
    , FileSection (..)
@@ -29,43 +27,9 @@ module Profiling.Linux.Perf.Types
    )where
 
 import Data.Word (Word64, Word32, Word16, Word8, Word)
-import Data.Char (chr)
 import Text.PrettyPrint (text, (<+>), ($$), render, empty, integer, (<>), hsep, Doc)
-import Data.ByteString.Lazy (ByteString, unpack)
-
--- -----------------------------------------------------------------------------
--- Pretty printing interface
-
-class Pretty a where
-   pretty :: a -> Doc
-
-prettyString :: Pretty a => a -> String
-prettyString = render . pretty
-
-instance Pretty a => Pretty (Maybe a) where
-   pretty Nothing = empty
-   pretty (Just x) = pretty x
-
-instance Pretty Word8 where
-   pretty = integer . fromIntegral
-
-instance Pretty Word16 where
-   pretty = integer . fromIntegral
-
-instance Pretty Word32 where
-   pretty = integer . fromIntegral
-
-instance Pretty Word64 where
-   pretty = integer . fromIntegral
-
-instance (Pretty a, Pretty b) => Pretty (a, b) where
-   pretty (x, y) = text "(" <> pretty x <> text "," <+> pretty y <> text ")"
-
-instance Pretty ByteString where
-   pretty = text . unpackAsChars
-      where
-      unpackAsChars :: ByteString -> String
-      unpackAsChars bs = foldr (\c cs -> (chr $ fromIntegral c) : cs) [] (unpack bs)
+import Data.ByteString.Lazy (ByteString)
+import Profiling.Linux.Perf.Pretty (Pretty (..))
 
 -- -----------------------------------------------------------------------------
 -- Event data types
@@ -267,7 +231,14 @@ data EventPayload =
    CommEvent {
       ce_pid :: Word32,  -- process id
       ce_tid :: Word32,  -- thread id
-      ce_comm :: ByteString -- name of the application
+      ce_comm :: ByteString, -- name of the application
+      -- the following are only found if sample_id_all is True:
+      ce_pid_ :: Maybe Word32, -- XXX are these repeated from above?, if so we should leave them out
+      ce_tid_ :: Maybe Word32, -- XXX are these repeated from above?
+      ce_time :: Maybe Word64,
+      ce_id :: Maybe Word64,
+      ce_streamid :: Maybe Word64,
+      ce_cpu :: Maybe Word32
    }
    -- Corresponds with the mmap_event struct in <perf source>/util/event.h (without the header)
    | MmapEvent {
@@ -339,7 +310,13 @@ instance Pretty EventPayload where
    pretty ce@(CommEvent{}) =
       text "pid:" <+> pretty (ce_pid ce) $$
       text "tid:" <+> pretty (ce_tid ce) $$
-      text "comm:" <+> pretty (ce_comm ce)
+      text "comm:" <+> pretty (ce_comm ce) $$
+      text "pid_:" <+> pretty (ce_pid_ ce) $$
+      text "tid_:" <+> pretty (ce_tid_ ce) $$
+      text "time:" <+> pretty (ce_time ce) $$
+      text "id:" <+> pretty (ce_id ce) $$
+      text "streamid:" <+> pretty (ce_streamid ce) $$
+      text "cpu:" <+> pretty (ce_cpu ce)
    pretty me@(MmapEvent{}) =
       text "pid:" <+> pretty (me_pid me) $$
       text "tid:" <+> pretty (me_tid me) $$
