@@ -39,7 +39,7 @@ import Data.Word (Word64, Word32)
 import Data.List (intersperse, sortBy)
 import Data.Map as Map hiding (map, filter, null)
 import Data.ByteString.Lazy (ByteString)
-import Data.Bits (testBit, bitSize, Bits)
+import Data.Bits (testBit)
 import System.IO (openFile, IOMode(ReadMode), Handle)
 
 data OutputStyle = Dump | Trace
@@ -227,12 +227,3 @@ getEventTime other = 0
 -- Compare two events based on their timestamp.
 compareSamplePayload :: EventPayload -> EventPayload -> Ordering
 compareSamplePayload e1 e2 = compare (getEventTime e1) (getEventTime e2)
-
-bits :: Bits a => a -> [Bool]
-bits x = map (testBit x) [0 .. bitSize x - 1]
-
-showBits :: Bits a => a -> String
-showBits = map toBit . bits
-   where
-   toBit True  = '1'
-   toBit False = '0'

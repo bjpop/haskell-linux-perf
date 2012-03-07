@@ -13,12 +13,14 @@
 module Profiling.Linux.Perf.Pretty
    ( Pretty (..)
    , prettyString
+   , showBits
    )where
 
 import Data.Word (Word64, Word32, Word16, Word8, Word)
 import Data.Char (chr)
 import Text.PrettyPrint (text, (<+>), ($$), render, empty, integer, (<>), hsep, Doc)
 import Data.ByteString.Lazy (ByteString, unpack)
+import Data.Bits (testBit, Bits, bitSize)
 
 -- -----------------------------------------------------------------------------
 -- Pretty printing interface
@@ -54,3 +56,11 @@ instance Pretty ByteString where
       unpackAsChars :: ByteString -> String
       unpackAsChars bs = foldr (\c cs -> (chr $ fromIntegral c) : cs) [] (unpack bs)
 
+bits :: Bits a => a -> [Bool]
+bits x = map (testBit x) [0 .. bitSize x - 1]
+
+showBits :: Bits a => a -> String
+showBits = map toBit . bits
+   where
+   toBit True  = '1'
+   toBit False = '0'

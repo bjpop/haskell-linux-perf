@@ -29,7 +29,7 @@ module Profiling.Linux.Perf.Types
 import Data.Word (Word64, Word32, Word16, Word8, Word)
 import Text.PrettyPrint (text, (<+>), ($$), render, empty, integer, (<>), hsep, Doc)
 import Data.ByteString.Lazy (ByteString)
-import Profiling.Linux.Perf.Pretty (Pretty (..))
+import Profiling.Linux.Perf.Pretty (Pretty (..), showBits)
 
 -- -----------------------------------------------------------------------------
 -- Event data types
@@ -184,7 +184,8 @@ instance Pretty EventAttr where
       text "sample period or frequency:" <+> pretty (ea_sample_period_or_freq ea) $$
       text "sample type:" <+> pretty (ea_sample_type ea) $$
       text "read format:" <+> pretty (ea_read_format ea) $$
-      text "flags: " <+> pretty (ea_flags ea) $$
+      -- text "flags: " <+> pretty (ea_flags ea) $$
+      text "flags: " <+> text (showBits (ea_flags ea)) $$
       text "wakeup events or watermark:" <+> pretty (ea_wakeup_events_or_watermark ea) $$
       text "bp type:" <+> pretty (ea_bp_type ea) $$
       text "bp address or config1:" <+> pretty (ea_bp_addr_or_config1 ea) $$
