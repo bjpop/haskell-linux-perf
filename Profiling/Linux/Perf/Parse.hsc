@@ -26,7 +26,8 @@ module Profiling.Linux.Perf.Parse
 
 import Profiling.Linux.Perf.Types as Types
    ( FileSection (..), FileHeader (..), EventAttr (..), FileAttr (..), TraceEventType (..)
-   , EventHeader (..), EventPayload (..), SampleFormat (..), EventType (..), Event (..) )
+   , EventHeader (..), EventPayload (..), SampleFormat (..), EventType (..), Event (..)
+   , EventAttrFlag (..), testEventAttrFlag )
 import Data.Word (Word64, Word8, Word16, Word32)
 import Data.Binary (Binary (..), getWord8)
 import Control.Monad.Error (ErrorT (..), lift, replicateM, when, throwError )
@@ -209,12 +210,22 @@ parseEventAttr = do
    ea_sample_period_or_freq <- getU64
    ea_sample_type <- getU64
    ea_read_format <- getU64
+   -- ea_flags <- parseEventAttrFlags `fmap` getU64
    ea_flags <- getU64
    ea_wakeup_events_or_watermark <- getU32
    ea_bp_type <- getU32
    ea_bp_addr_or_config1 <- getU64
    ea_bp_len_or_config2 <- getU64
    return EventAttr{..}
+
+parseEventAttrFlags :: Word64 -> [EventAttrFlag]
+parseEventAttrFlags word =
+   foldr testFlag [] ([toEnum 0 ..]::[EventAttrFlag])
+   where
+   testFlag :: EventAttrFlag -> [EventAttrFlag] -> [EventAttrFlag]
+   testFlag flag rest
+      | testBit word (fromEnum flag) = flag : rest
+      | otherwise = rest
 
 -- from <perf source>/util/header.c
 --
@@ -292,13 +303,6 @@ parseCommEvent sampleType = do
    ce_pid <- getU32
    ce_tid <- getU32
    ce_comm <- getBSNul
-   -- the following are present if sample_id_all is True:
-   ce_pid_ <- parseSampleType sampleType PERF_SAMPLE_TID getU32
-   ce_tid_ <- parseSampleType sampleType PERF_SAMPLE_TID getU32
-   ce_time <- parseSampleType sampleType PERF_SAMPLE_TIME getU64
-   ce_id <- parseSampleType sampleType PERF_SAMPLE_ID getU64
-   ce_streamid <- parseSampleType sampleType PERF_SAMPLE_STREAM_ID getU64
-   ce_cpu <- parseSampleType sampleType PERF_SAMPLE_CPU getU32
    return CommEvent{..}
 
 -- from <perf source>/util/event.h

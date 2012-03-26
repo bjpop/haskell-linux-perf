@@ -24,12 +24,15 @@ module Profiling.Linux.Perf.Types
    , EventPayload (..)
    , SampleFormat (..)
    , TraceEventType (..)
+   , EventAttrFlag (..)
+   , testEventAttrFlag
    )where
 
 import Data.Word (Word64, Word32, Word16, Word8, Word)
 import Text.PrettyPrint (text, (<+>), ($$), render, empty, integer, (<>), hsep, Doc)
 import Data.ByteString.Lazy (ByteString)
 import Profiling.Linux.Perf.Pretty (Pretty (..), showBits)
+import Data.Bits (testBit)
 
 -- -----------------------------------------------------------------------------
 -- Event data types
@@ -157,6 +160,94 @@ instance Pretty FileHeader where
       text "event size:" <+> pretty (fh_event_size fh) $$
       text "features:" <+> hsep (Prelude.map pretty $ fh_adds_features fh)
 
+-- See struct perf_event_attr in linux/perf_event.h
+data EventAttrFlag
+   = Disabled              -- off by default
+   | Inherit               -- children inherit it
+   | Pinned                -- must always be on PMU
+   | Exclusive             -- only group on PMU
+   | ExcludeUser           -- don't count user
+   | ExcludeKernel         -- ditto kernel
+   | ExcludeHV             -- ditto hypervisor
+   | ExcludeIdle           -- don't count when idle
+   | Mmap                  -- include mmap data
+   | Comm                  -- include comm data
+   | Freq                  -- use freq, not period
+   | InheritStat           -- per task counts
+   | EnableOnExec          -- next exec enables
+   | Task                  -- trace fork/exit
+   | WaterMark             -- wakeup_watermark
+
+   -- precise_ip
+   -- See also PERF_RECORD_MISC_EXACT_IP
+   | ArbitrarySkid
+   | ConstantSkid
+   | RequestedZeroSkid
+   | CompulsoryZeroSkid
+
+   | MmapData              -- non-exec mmap data
+   | SampleIdAll           -- sample_type all events
+   deriving (Eq, Ord, Enum, Show)
+
+instance Pretty EventAttrFlag where
+   pretty Disabled = text "disabled"
+   pretty Inherit = text "inherit"
+   pretty Pinned = text "pinned"
+   pretty Exclusive = text "exclusive"
+   pretty ExcludeUser = text "exclude-user"
+   pretty ExcludeKernel = text "exclude-kernel"
+   pretty ExcludeHV = text "exclude-hypervisor"
+   pretty ExcludeIdle = text "exclude-idle"
+   pretty Mmap = text "mmap"
+   pretty Comm = text "comm"
+   pretty Freq = text "freq"
+   pretty InheritStat = text "inherit-stat"
+   pretty EnableOnExec = text "enable-on-exec"
+   pretty Task = text "task"
+   pretty WaterMark = text "watermark"
+   pretty ArbitrarySkid = text "arbitrary-skid"
+   pretty ConstantSkid = text "constant-skid"
+   pretty RequestedZeroSkid = text "requested-zero-skid"
+   pretty CompulsoryZeroSkid = text "compulsory-zero-skid"
+   pretty MmapData = text "mmap-data"
+   pretty SampleIdAll = text "sample-id-all"
+
+-- Test if a given EventAttrFlag is set.
+-- Tedious definition because of the way the skid flags are
+-- implemented as a 2 bit word instead of individual single bits. 
+testEventAttrFlag :: Word64 -> EventAttrFlag -> Bool
+testEventAttrFlag word flag =
+   case flag of
+      Disabled           -> testBit word 0
+      Inherit            -> testBit word 1
+      Pinned             -> testBit word 2
+      Exclusive          -> testBit word 3
+      ExcludeUser        -> testBit word 4
+      ExcludeKernel      -> testBit word 5
+      ExcludeHV          -> testBit word 6
+      ExcludeIdle        -> testBit word 7
+      Mmap               -> testBit word 8
+      Comm               -> testBit word 9
+      Freq               -> testBit word 10 
+      InheritStat        -> testBit word 11
+      EnableOnExec       -> testBit word 12 
+      Task               -> testBit word 13 
+      WaterMark          -> testBit word 14 
+      ArbitrarySkid      -> not (testBit word 15) && not (testBit word 16)
+      ConstantSkid       -> not (testBit word 15) && (testBit word 16)
+      RequestedZeroSkid  -> (testBit word 15) && not (testBit word 16)
+      CompulsoryZeroSkid -> (testBit word 15) && (testBit word 16)
+      MmapData           -> testBit word 17
+      SampleIdAll        -> testBit word 18
+
+prettyFlags :: Word64 -> Doc
+prettyFlags word = foldr testFlag empty [toEnum 0 ..]
+   where
+   testFlag :: EventAttrFlag -> Doc -> Doc
+   testFlag flag rest
+      | testEventAttrFlag word flag = pretty flag <+> rest
+      | otherwise = rest
+
 -- Corresponds with the perf_event_attr struct in <perf source>/util/perf_event.h
 data EventAttr
    = EventAttr {
@@ -184,8 +275,7 @@ instance Pretty EventAttr where
       text "sample period or frequency:" <+> pretty (ea_sample_period_or_freq ea) $$
       text "sample type:" <+> pretty (ea_sample_type ea) $$
       text "read format:" <+> pretty (ea_read_format ea) $$
-      -- text "flags: " <+> pretty (ea_flags ea) $$
-      text "flags: " <+> text (showBits (ea_flags ea)) $$
+      text "flags:" <+> prettyFlags (ea_flags ea) $$
       text "wakeup events or watermark:" <+> pretty (ea_wakeup_events_or_watermark ea) $$
       text "bp type:" <+> pretty (ea_bp_type ea) $$
       text "bp address or config1:" <+> pretty (ea_bp_addr_or_config1 ea) $$
@@ -232,14 +322,7 @@ data EventPayload =
    CommEvent {
       ce_pid :: Word32,  -- process id
       ce_tid :: Word32,  -- thread id
-      ce_comm :: ByteString, -- name of the application
-      -- the following are only found if sample_id_all is True:
-      ce_pid_ :: Maybe Word32, -- XXX are these repeated from above?, if so we should leave them out
-      ce_tid_ :: Maybe Word32, -- XXX are these repeated from above?
-      ce_time :: Maybe Word64,
-      ce_id :: Maybe Word64,
-      ce_streamid :: Maybe Word64,
-      ce_cpu :: Maybe Word32
+      ce_comm :: ByteString -- name of the application
    }
    -- Corresponds with the mmap_event struct in <perf source>/util/event.h (without the header)
    | MmapEvent {
@@ -311,13 +394,7 @@ instance Pretty EventPayload where
    pretty ce@(CommEvent{}) =
       text "pid:" <+> pretty (ce_pid ce) $$
       text "tid:" <+> pretty (ce_tid ce) $$
-      text "comm:" <+> pretty (ce_comm ce) $$
-      text "pid_:" <+> pretty (ce_pid_ ce) $$
-      text "tid_:" <+> pretty (ce_tid_ ce) $$
-      text "time:" <+> pretty (ce_time ce) $$
-      text "id:" <+> pretty (ce_id ce) $$
-      text "streamid:" <+> pretty (ce_streamid ce) $$
-      text "cpu:" <+> pretty (ce_cpu ce)
+      text "comm:" <+> pretty (ce_comm ce)
    pretty me@(MmapEvent{}) =
       text "pid:" <+> pretty (me_pid me) $$
       text "tid:" <+> pretty (me_tid me) $$

@@ -31,7 +31,8 @@ module Profiling.Linux.Perf
 
 import Profiling.Linux.Perf.Parse
    ( FileHeader (..), FileAttr (..), TraceEventType (..), Event (..),  EventPayload (..), EventHeader (..)
-   , EventAttr (..), readHeader, readAttributes, readAttributeIDs, readEventTypes, readEvent )
+   , EventAttr (..), readHeader, readAttributes, readAttributeIDs, readEventTypes, readEvent
+   , EventAttrFlag (..), testEventAttrFlag )
 import Profiling.Linux.Perf.Pretty ( pretty )
 import Text.PrettyPrint as Pretty
    ( render, Doc, empty, text, (<+>), (<>), vcat, ($$), int, hsep )
@@ -92,7 +93,9 @@ getAttrInfo = map getSampleTypeAndIdAll
    where
    getSampleTypeAndIdAll :: FileAttr -> (Word64, Bool)
    getSampleTypeAndIdAll fattr
-      = (ea_sample_type attr, testBit (ea_flags attr) sampleIdAllPos)
+      -- = (ea_sample_type attr, testBit (ea_flags attr) sampleIdAllPos)
+      -- = (ea_sample_type attr, SampleIdAll `elem` ea_flags attr)
+      = (ea_sample_type attr, testEventAttrFlag (ea_flags attr) SampleIdAll)
       where
       attr = fa_attr $ fattr
 
