@@ -1,6 +1,6 @@
 -----------------------------------------------------------------------------
 -- |
--- Copyright   : (c) 2010,2011,2012 Simon Marlow, Bernie Pope 
+-- Copyright   : (c) 2010,2011,2012 Simon Marlow, Bernie Pope
 -- License     : BSD-style
 -- Maintainer  : florbitous@gmail.com
 -- Stability   : experimental
@@ -81,7 +81,7 @@ readPerfData file = do
    return (header, attrs, idss, types, events)
 
 -- Render the components of the perf.data file under the specified style
-display :: OutputStyle -> PerfFileContents -> IO () 
+display :: OutputStyle -> PerfFileContents -> IO ()
 display style contents = do
    putStrLn $ render $ case style of
       Dump ->  dumper contents
@@ -110,7 +110,7 @@ readEvents h maxOffset offset sampleType =
       | offset >= maxOffset = return $ reverse acc
       | otherwise = do
            event <- readEvent h offset sampleType
-           let size = eh_size $ ev_header event 
+           let size = eh_size $ ev_header event
                nextOffset = offset + fromIntegral size
            readWorker nextOffset (event:acc)
 
@@ -165,14 +165,14 @@ traceSamples idMap attrMap (ee@ExitEvent {} : rest) =
    doc : traceSamples idMap attrMap rest
    where
    doc = text "exit:" <+> parent <+> text "->" <+> child <+> timeStamp
-   parent = pretty (ee_ppid ee, ee_ptid ee) 
+   parent = pretty (ee_ppid ee, ee_ptid ee)
    child = pretty (ee_pid ee, ee_tid ee)
    timeStamp = prettyIntegral $ ee_time ee
 traceSamples idMap attrMap (fe@ForkEvent {} : rest) =
    doc : traceSamples idMap attrMap rest
    where
    doc = text "fork:" <+> parent <+> text "->" <+> child <+> timeStamp
-   parent = pretty (fe_ppid fe, fe_ptid fe) 
+   parent = pretty (fe_ppid fe, fe_ptid fe)
    child = pretty (fe_pid fe, fe_tid fe)
    timeStamp = prettyIntegral $ fe_time fe
 traceSamples idMap attrMap (ce@CommEvent {} : rest) =
@@ -198,7 +198,7 @@ traceSamples idMap attrMap (se@SampleEvent {} : rest) =
          (_, Nothing) -> text "unknown tid"
          (Just pid, Just tid) ->
             case Map.lookup (pid, tid) idMap of
-               Nothing -> pretty (pid, tid) 
+               Nothing -> pretty (pid, tid)
                Just name -> pretty name
    sampleType =
       case se_id se of

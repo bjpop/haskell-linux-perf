@@ -12,7 +12,7 @@
 --
 -----------------------------------------------------------------------------
 
-module Profiling.Linux.Perf.Types 
+module Profiling.Linux.Perf.Types
    ( Event (..)
    , EventType (..)
    , EventCPUMode (..)
@@ -122,7 +122,7 @@ data EventCPUMode -- a bitfield in perf_event_header->misc
 
 instance Pretty EventCPUMode where
    pretty = text . show
- 
+
 -- Corresponds with the perf_file_section struct in <perf source>/util/header.h
 data FileSection
   = FileSection {
@@ -214,7 +214,7 @@ instance Pretty EventAttrFlag where
 
 -- Test if a given EventAttrFlag is set.
 -- Tedious definition because of the way the skid flags are
--- implemented as a 2 bit word instead of individual single bits. 
+-- implemented as a 2 bit word instead of individual single bits.
 testEventAttrFlag :: Word64 -> EventAttrFlag -> Bool
 testEventAttrFlag word flag =
    case flag of
@@ -228,11 +228,11 @@ testEventAttrFlag word flag =
       ExcludeIdle        -> testBit word 7
       Mmap               -> testBit word 8
       Comm               -> testBit word 9
-      Freq               -> testBit word 10 
+      Freq               -> testBit word 10
       InheritStat        -> testBit word 11
-      EnableOnExec       -> testBit word 12 
-      Task               -> testBit word 13 
-      WaterMark          -> testBit word 14 
+      EnableOnExec       -> testBit word 12
+      Task               -> testBit word 13
+      WaterMark          -> testBit word 14
       ArbitrarySkid      -> not (testBit word 15) && not (testBit word 16)
       ConstantSkid       -> not (testBit word 15) && (testBit word 16)
       RequestedZeroSkid  -> (testBit word 15) && not (testBit word 16)
@@ -295,7 +295,7 @@ instance Pretty FileAttr where
 
 data TraceEventType = TraceEventType {
    te_event_id :: Word64, -- This entry belongs to the perf event attr entry where .config
-                          -- has the same value as this id. 
+                          -- has the same value as this id.
    te_name :: ByteString
 }
 

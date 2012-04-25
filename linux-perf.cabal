@@ -17,7 +17,7 @@ Library
                    Profiling.Linux.Perf.Types,
                    Profiling.Linux.Perf.Parse,
                    Profiling.Linux.Perf.Pretty
-  
+
   -- Packages needed in order to build this package.
   Build-depends: base==4.*,
                  binary==0.5.*,
@@ -25,14 +25,14 @@ Library
                  bytestring==0.9.*,
                  pretty==1.0.*,
                  containers==0.4.*
-  
+
   include-dirs: Profiling/Linux/Perf
 
   -- Modules not exported by this package.
-  -- Other-modules:       
-  
+  -- Other-modules:
+
   -- Extra tools (e.g. alex, hsc2hs, ...) needed to build the source.
-  -- Build-tools:         
+  -- Build-tools:
 
 
 Executable dump-perf {

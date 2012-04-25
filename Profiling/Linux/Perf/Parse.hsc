@@ -2,7 +2,7 @@
 
 -----------------------------------------------------------------------------
 -- |
--- Copyright   : (c) 2010,2011,2012 Simon Marlow, Bernie Pope 
+-- Copyright   : (c) 2010,2011,2012 Simon Marlow, Bernie Pope
 -- License     : BSD-style
 -- Maintainer  : florbitous@gmail.com
 -- Stability   : experimental
@@ -91,7 +91,7 @@ hEADER_FEAT_BITS = (#const HEADER_FEAT_BITS) :: Int
 
 -- -----------------------------------------------------------------------------
 
--- from <perf source>/util/header.h 
+-- from <perf source>/util/header.h
 --
 -- struct perf_file_section {
 --      u64 offset;
@@ -104,7 +104,7 @@ parseFileSection = do
     sec_size   <- getU64
     return FileSection{..}
 
--- from <perf source>/util/header.h 
+-- from <perf source>/util/header.h
 --
 -- struct perf_file_header {
 --      u64                             magic;
@@ -279,7 +279,7 @@ parseEventHeader = do
 --      char filename[PATH_MAX];
 -- };
 
-parseMmapEvent :: GetEvents EventPayload 
+parseMmapEvent :: GetEvents EventPayload
 parseMmapEvent = do
    -- note we do not parse the event header here, it is done in parseEvent
    me_pid <- getU32
@@ -445,7 +445,7 @@ readEventHeader :: Handle -> Word64 -> IO EventHeader
 readEventHeader h offset = do
    hSeek h AbsoluteSeek $ fromIntegral offset
    b <- B.hGet h (#size struct perf_event_header)
-   runGetEventsCheck parseEventHeader b 
+   runGetEventsCheck parseEventHeader b
 
 readEvent :: Handle -> Word64 -> Word64 -> IO Event
 readEvent h offset sampleType = do
