@@ -38,7 +38,7 @@ import Text.PrettyPrint as Pretty
    ( render, Doc, empty, text, (<+>), (<>), vcat, ($$), int, hsep )
 import Data.Word (Word64, Word32)
 import Data.List (intersperse, sortBy)
-import Data.Map as Map hiding (map, filter, null)
+import Data.Map as Map hiding (map, filter, null, foldr)
 import Data.ByteString.Lazy (ByteString)
 import Data.Bits (testBit)
 import System.IO (openFile, IOMode(ReadMode), Handle)

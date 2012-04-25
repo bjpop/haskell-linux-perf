@@ -21,7 +21,7 @@ Library
   -- Packages needed in order to build this package.
   Build-depends: base==4.*,
                  binary==0.5.*,
-                 mtl==1.1.*,
+                 mtl==2.*,
                  bytestring==0.9.*,
                  pretty==1.0.*,
                  containers==0.4.*
