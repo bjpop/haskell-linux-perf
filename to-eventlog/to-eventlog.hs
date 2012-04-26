@@ -11,10 +11,32 @@
 import GHC.RTS.Events
 import Data.Word
 
+import Profiling.Linux.Perf (PerfFileContents, readPerfData)
+import System.Exit (exitWith, ExitCode (ExitFailure))
+import System.IO (hPutStrLn, stderr)
+import System.Environment (getArgs)
+
+die :: String -> IO a
+die s = hPutStrLn stderr s >> exitWith (ExitFailure 1)
+
 main :: IO ()
 main = do
-  writeEventLogToFile "test.eventlog" test
-  putStr $ ppEventLog test
+  args <- getArgs
+  files <- case args of
+    []             -> return $ Just ("perf.data", "test.eventlog")
+    ["--no-files"] -> return $ Nothing
+    [inF, outF]    -> return $ Just (inF, outF)
+    _ -> die "Syntax: to-eventlog [--no-files|perf_file eventlog_file]"
+  case files of
+    Nothing -> putStr $ ppEventLog test
+    Just (inF, outF) -> do
+      perfData <- readPerfData inF
+      let perfEventlog = perfToEventlog perfData
+      writeEventLogToFile outF perfEventlog
+
+-- type PerfFileContents = (FileHeader, [FileAttr], [[Word64]], [TraceEventType], [Event])
+perfToEventlog :: PerfFileContents -> EventLog
+perfToEventlog (_, _, _, _, _) = test  -- TODO
 
 test :: EventLog
 test = eventLog $
