@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards, PatternGuards #-}
 -----------------------------------------------------------------------------
 -- |
 -- Copyright   : (c) 2010,2011,2012 Simon Marlow, Bernie Pope
@@ -5,18 +6,6 @@
 -- Maintainer  : florbitous@gmail.com
 -- Stability   : experimental
 -- Portability : ghc
---
--- A program to parse and then pretty print the contents of "perf.data" to
--- stdout. "perf.data" is the the output of the "perf record" command on
--- linux (linux performance counter information).
---
--- The main use of this program is to demonstrate how to use the
--- Profilinf.Linux.Perf library.
---
--- Usage: dump-perf <dump|trace> <filename>
---
--- If filename is missing then it will assume the input is "perf.data" in
--- the current working directory.
 --
 -----------------------------------------------------------------------------
 
@@ -27,6 +16,9 @@ module Profiling.Linux.Perf
    , readAndDisplay
    , readPerfData
    , display
+   , perfTrace
+   , PerfEventTypeMap
+   , PerfEvent (..)
    ) where
 
 import Profiling.Linux.Perf.Parse
@@ -38,12 +30,46 @@ import Text.PrettyPrint as Pretty
    ( render, Doc, empty, text, (<+>), (<>), vcat, ($$), int, hsep )
 import Data.Word (Word64, Word32)
 import Data.List (intersperse, sortBy)
-import Data.Map as Map hiding (map, filter, null, foldr)
-import Data.ByteString.Lazy (ByteString)
+import Data.Map as Map hiding (mapMaybe, map, filter, null, foldr)
+import Data.ByteString.Lazy (unpack)
 import Data.Bits (testBit)
 import System.IO (openFile, IOMode(ReadMode), Handle)
+import Data.Maybe (mapMaybe)
 
-data OutputStyle = Dump | Trace
+data PerfEvent =
+   PerfSample
+   { identity :: Word64  -- sample ID
+   , pid :: Word32       -- process ID
+   , tid :: Word32       -- thread ID
+   , timestamp :: Word64 -- timestamp in nanoseconds since some arbitrary point
+   }
+
+type PerfEventTypeMap = Map Word64 String
+
+-- return a list of perf events in timestamp order
+perfTrace :: FilePath -> IO (PerfEventTypeMap, [PerfEvent])
+perfTrace file = makeTrace `fmap` readPerfData file
+
+makeTrace :: PerfFileContents -> (PerfEventTypeMap, [PerfEvent])
+makeTrace (header, attrs, idss, types, events) =
+   (eventTypeMap, traceSamples eventTypeMap $ sortBy compareSamplePayload $ map ev_payload events)
+   where
+   -- mapping from type id to type name
+   typesMap :: Map Word64 String
+   typesMap = fromList typesIDsNames
+   typesIDsNames = map (\t -> (te_event_id t, show $ te_name t)) types
+   -- mapping from event id to type name
+   eventTypeMap :: PerfEventTypeMap
+   eventTypeMap = makeAttrsMap $ zip (map fa_attr attrs) idss
+   makeAttrsMap :: [(EventAttr, [Word64])] -> Map Word64 String
+   makeAttrsMap = foldr idsToName Map.empty
+   idsToName :: (EventAttr, [Word64]) -> Map Word64 String -> Map Word64 String
+   idsToName (attr, ids) result =
+      case Map.lookup (ea_config attr) typesMap of
+         Nothing -> result
+         Just name -> foldr (flip Map.insert $ show name) result ids
+
+data OutputStyle = Dump
 
 -- bit position of sample_id_all in the flags part of event_attr
 sampleIdAllPos :: Int
@@ -85,7 +111,6 @@ display :: OutputStyle -> PerfFileContents -> IO ()
 display style contents = do
    putStrLn $ render $ case style of
       Dump ->  dumper contents
-      Trace -> tracer contents
 
 -- Get the Sample Type and test the sample_id_all bit in the flags field
 getAttrInfo :: [FileAttr] -> [(Word64, Bool)]
@@ -93,8 +118,6 @@ getAttrInfo = map getSampleTypeAndIdAll
    where
    getSampleTypeAndIdAll :: FileAttr -> (Word64, Bool)
    getSampleTypeAndIdAll fattr
-      -- = (ea_sample_type attr, testBit (ea_flags attr) sampleIdAllPos)
-      -- = (ea_sample_type attr, SampleIdAll `elem` ea_flags attr)
       = (ea_sample_type attr, testEventAttrFlag (ea_flags attr) SampleIdAll)
       where
       attr = fa_attr $ fattr
@@ -133,85 +156,20 @@ dumper (header, attrs, idss, types, events) =
    separator :: Doc
    separator = text $ replicate 40 '-'
 
--- Pretty print the events in sorted timestamp order, mapping events to their
--- types and PIDs to their command names.
-tracer :: PerfFileContents -> Doc
-tracer (header, attrs, idss, types, events) =
-   vcat $ traceSamples Map.empty attrsMap
-        $ sortBy compareSamplePayload
-        $ map ev_payload events
-   where
-   -- mapping from type id to type name
-   typesMap :: Map Word64 ByteString
-   typesMap = fromList typesIDsNames
-   typesIDsNames = map (\t -> (te_event_id t, te_name t)) types
-   -- mapping from event id to type name
-   attrsMap :: Map Word64 ByteString
-   attrsMap = makeAttrsMap $ zip (map fa_attr attrs) idss
-   makeAttrsMap :: [(EventAttr, [Word64])] -> Map Word64 ByteString
-   makeAttrsMap = foldr idsToName Map.empty
-   idsToName :: (EventAttr, [Word64]) -> Map Word64 ByteString -> Map Word64 ByteString
-   idsToName (attr, ids) result =
-      case Map.lookup (ea_config attr) typesMap of
-         Nothing -> result
-         Just name -> foldr (flip Map.insert name) result ids
-
 prettyIntegral :: Integral a => a -> Doc
 prettyIntegral = int . fromIntegral
 
-traceSamples :: Map (Word32, Word32) ByteString -> Map Word64 ByteString -> [EventPayload] -> [Doc]
-traceSamples _idMap _attrMap [] = []
-traceSamples idMap attrMap (ee@ExitEvent {} : rest) =
-   doc : traceSamples idMap attrMap rest
-   where
-   doc = text "exit:" <+> parent <+> text "->" <+> child <+> timeStamp
-   parent = pretty (ee_ppid ee, ee_ptid ee)
-   child = pretty (ee_pid ee, ee_tid ee)
-   timeStamp = prettyIntegral $ ee_time ee
-traceSamples idMap attrMap (fe@ForkEvent {} : rest) =
-   doc : traceSamples idMap attrMap rest
-   where
-   doc = text "fork:" <+> parent <+> text "->" <+> child <+> timeStamp
-   parent = pretty (fe_ppid fe, fe_ptid fe)
-   child = pretty (fe_pid fe, fe_tid fe)
-   timeStamp = prettyIntegral $ fe_time fe
-traceSamples idMap attrMap (ce@CommEvent {} : rest) =
-   -- doc : traceSamples (insert (pid,tid) command idMap) attrMap rest
-   traceSamples (insert (pid,tid) command idMap) attrMap rest
-   where
-{-
-   doc = text "command:" <+> pretty command <+>
-         text "pid:" <+> prettyIntegral pid <+>
-         text "tid:" <+> prettyIntegral tid
--}
-   command = ce_comm ce
-   tid = ce_tid ce
-   pid = ce_pid ce
-traceSamples idMap attrMap (se@SampleEvent {} : rest) =
-   doc : traceSamples idMap attrMap rest
-   where
-   doc = processName <+> pid <+> cpu <+> sampleType <+> timeStamp
-   processName =
-      case (se_pid se, se_tid se) of
-         (Nothing, Nothing) -> text "unknown (pid, tid)"
-         (Nothing, _) -> text "unknown pid"
-         (_, Nothing) -> text "unknown tid"
-         (Just pid, Just tid) ->
-            case Map.lookup (pid, tid) idMap of
-               Nothing -> pretty (pid, tid)
-               Just name -> pretty name
-   sampleType =
-      case se_id se of
-         Nothing -> text "unknown sample id"
-         Just sid ->
-            case Map.lookup sid attrMap of
-               Nothing -> prettyIntegral sid
-               Just name -> pretty name
-   timeStamp = maybe Pretty.empty prettyIntegral $ se_time se
-   cpu = text "cpu=" <> (maybe Pretty.empty prettyIntegral $ se_cpu se)
-   pid = text "pid=" <> (maybe Pretty.empty prettyIntegral $ se_pid se)
-traceSamples idMap attrMap (_otherSample : rest) =
-  traceSamples idMap attrMap rest
+traceSamples :: PerfEventTypeMap -> [EventPayload] -> [PerfEvent]
+traceSamples attrMap = mapMaybe (traceSample attrMap)
+
+traceSample :: PerfEventTypeMap -> EventPayload -> Maybe PerfEvent
+traceSample attrMap (se@SampleEvent {})
+   | Just pid <- se_pid se,
+     Just tid <- se_tid se,
+     Just timestamp <- se_time se,
+     Just identity <- se_id se =
+        Just (PerfSample {..})
+   | otherwise = Nothing
 
 isSampleEvent :: EventPayload -> Bool
 isSampleEvent (SampleEvent {}) = True

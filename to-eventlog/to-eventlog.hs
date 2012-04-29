@@ -8,13 +8,16 @@
 --
 -----------------------------------------------------------------------------
 
-import GHC.RTS.Events
+import GHC.RTS.Events hiding (pid)
 import Data.Word
 
-import Profiling.Linux.Perf (PerfFileContents, readPerfData)
+-- import Profiling.Linux.Perf (PerfFileContents, readPerfData)
+import Profiling.Linux.Perf (PerfEvent (..), perfTrace, PerfEventTypeMap)
 import System.Exit (exitWith, ExitCode (ExitFailure))
 import System.IO (hPutStrLn, stderr)
 import System.Environment (getArgs)
+import Data.Word (Word32)
+import Data.Map (toList)
 
 die :: String -> IO a
 die s = hPutStrLn stderr s >> exitWith (ExitFailure 1)
@@ -22,21 +25,38 @@ die s = hPutStrLn stderr s >> exitWith (ExitFailure 1)
 main :: IO ()
 main = do
   args <- getArgs
-  files <- case args of
-    []             -> return $ Just ("perf.data", "test.eventlog")
-    ["--no-files"] -> return $ Nothing
-    [inF, outF]    -> return $ Just (inF, outF)
+  case args of
+    [pid, inF, outF] -> do
+       (perfEventTypeMap, perfEvents) <- perfTrace inF
+       let perfEventlog = perfToEventlog (read pid) perfEventTypeMap perfEvents
+       writeEventLogToFile outF perfEventlog
     _ -> die "Syntax: to-eventlog [--no-files|perf_file eventlog_file]"
-  case files of
-    Nothing -> putStr $ ppEventLog test
-    Just (inF, outF) -> do
+{-
       perfData <- readPerfData inF
       let perfEventlog = perfToEventlog perfData
       writeEventLogToFile outF perfEventlog
+-}
 
--- type PerfFileContents = (FileHeader, [FileAttr], [[Word64]], [TraceEventType], [Event])
-perfToEventlog :: PerfFileContents -> EventLog
-perfToEventlog (_, _, _, _, _) = test  -- TODO
+type PID = Word32
+
+perfToEventlog :: PID -> PerfEventTypeMap -> [PerfEvent] -> EventLog
+perfToEventlog pid typeMap events =
+   eventLog (typeMapToEvents typeMap ++ 
+             map perfToGHC (filter (eventPID pid) events))
+
+eventPID :: PID -> PerfEvent -> Bool
+eventPID pidTarget event = pidTarget == pid event
+
+typeMapToEvents :: PerfEventTypeMap -> [Event]
+typeMapToEvents typeMap = map toPerfName $ toList typeMap
+   where
+   toPerfName :: (Word64, String) -> Event
+   toPerfName (identity, eventName) =
+      Event 0 $ PerfName { perfNum = fromIntegral identity, name = eventName }
+
+perfToGHC :: PerfEvent -> Event
+perfToGHC e@(PerfSample {}) =
+   Event (timestamp e) (PerfTracepoint { perfNum = fromIntegral $ identity e, thread = tid e })
 
 test :: EventLog
 test = eventLog $

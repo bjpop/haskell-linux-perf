@@ -48,5 +48,6 @@ Executable to-eventlog {
   hs-source-dirs: to-eventlog
   Build-depends: linux-perf==0.1,
                  base==4.*,
-                 ghc-events==0.4.1.*
+                 ghc-events==0.4.1.*,
+                 containers==0.4.*
 }
