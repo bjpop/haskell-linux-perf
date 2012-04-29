@@ -46,7 +46,8 @@ data PerfEvent =
 
 type PerfEventTypeMap = Map Word64 String
 
--- return a list of perf events in timestamp order
+-- return a list of perf events in timestamp order, and a mapping from
+-- event ID to the event name
 perfTrace :: FilePath -> IO (PerfEventTypeMap, [PerfEvent])
 perfTrace file = makeTrace `fmap` readPerfData file
 
@@ -160,7 +161,7 @@ prettyIntegral :: Integral a => a -> Doc
 prettyIntegral = int . fromIntegral
 
 traceSamples :: PerfEventTypeMap -> [EventPayload] -> [PerfEvent]
-traceSamples attrMap = mapMaybe (traceSample attrMap)
+traceSamples attrMap = mapMaybe $ traceSample attrMap
 
 traceSample :: PerfEventTypeMap -> EventPayload -> Maybe PerfEvent
 traceSample attrMap (se@SampleEvent {})
@@ -170,6 +171,7 @@ traceSample attrMap (se@SampleEvent {})
      Just identity <- se_id se =
         Just (PerfSample {..})
    | otherwise = Nothing
+traceSample _attrMap otherEvent = Nothing
 
 isSampleEvent :: EventPayload -> Bool
 isSampleEvent (SampleEvent {}) = True

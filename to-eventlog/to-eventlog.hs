@@ -11,13 +11,15 @@
 import GHC.RTS.Events hiding (pid)
 import Data.Word
 
--- import Profiling.Linux.Perf (PerfFileContents, readPerfData)
 import Profiling.Linux.Perf (PerfEvent (..), perfTrace, PerfEventTypeMap)
 import System.Exit (exitWith, ExitCode (ExitFailure))
 import System.IO (hPutStrLn, stderr)
 import System.Environment (getArgs)
 import Data.Word (Word32)
 import Data.Map (toList)
+
+-- process identity
+type PID = Word32
 
 die :: String -> IO a
 die s = hPutStrLn stderr s >> exitWith (ExitFailure 1)
@@ -30,14 +32,8 @@ main = do
        (perfEventTypeMap, perfEvents) <- perfTrace inF
        let perfEventlog = perfToEventlog (read pid) perfEventTypeMap perfEvents
        writeEventLogToFile outF perfEventlog
-    _ -> die "Syntax: to-eventlog [--no-files|perf_file eventlog_file]"
-{-
-      perfData <- readPerfData inF
-      let perfEventlog = perfToEventlog perfData
-      writeEventLogToFile outF perfEventlog
--}
+    _ -> die "Syntax: to-eventlog [pid perf_file eventlog_file]"
 
-type PID = Word32
 
 perfToEventlog :: PID -> PerfEventTypeMap -> [PerfEvent] -> EventLog
 perfToEventlog pid typeMap events =
@@ -47,6 +43,8 @@ perfToEventlog pid typeMap events =
 eventPID :: PID -> PerfEvent -> Bool
 eventPID pidTarget event = pidTarget == pid event
 
+-- XXX should only collect only the types that are referred to by events in
+-- the process we are interested in (not all types).
 typeMapToEvents :: PerfEventTypeMap -> [Event]
 typeMapToEvents typeMap = map toPerfName $ toList typeMap
    where
@@ -54,9 +52,12 @@ typeMapToEvents typeMap = map toPerfName $ toList typeMap
    toPerfName (identity, eventName) =
       Event 0 $ PerfName { perfNum = fromIntegral identity, name = eventName }
 
+-- XXX we don't currently generate PerfCounter events, need to find out if
+-- perf records whether an event is a counter or a tracepoint.
 perfToGHC :: PerfEvent -> Event
 perfToGHC e@(PerfSample {}) =
-   Event (timestamp e) (PerfTracepoint { perfNum = fromIntegral $ identity e, thread = tid e })
+   Event (timestamp e) 
+         (PerfTracepoint { perfNum = fromIntegral $ identity e, thread = tid e })
 
 test :: EventLog
 test = eventLog $
