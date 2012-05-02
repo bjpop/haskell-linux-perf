@@ -19,7 +19,8 @@ module Profiling.Linux.Perf.Pretty
 import Data.Word (Word64, Word32, Word16, Word8, Word)
 import Data.Char (chr)
 import Text.PrettyPrint (text, (<+>), ($$), render, empty, integer, (<>), hsep, Doc)
-import Data.ByteString.Lazy (ByteString, unpack)
+import Data.ByteString.Lazy (ByteString)
+import Data.ByteString.Lazy.Char8 (unpack)
 import Data.Bits (testBit, Bits, bitSize)
 
 -- -----------------------------------------------------------------------------
@@ -51,10 +52,7 @@ instance (Pretty a, Pretty b) => Pretty (a, b) where
    pretty (x, y) = text "(" <> pretty x <> text "," <+> pretty y <> text ")"
 
 instance Pretty ByteString where
-   pretty = text . unpackAsChars
-      where
-      unpackAsChars :: ByteString -> String
-      unpackAsChars bs = foldr (\c cs -> (chr $ fromIntegral c) : cs) [] (unpack bs)
+   pretty = text . unpack
 
 bits :: Bits a => a -> [Bool]
 bits x = map (testBit x) [0 .. bitSize x - 1]

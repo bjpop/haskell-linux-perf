@@ -31,7 +31,7 @@ import Text.PrettyPrint as Pretty
 import Data.Word (Word64, Word32)
 import Data.List (intersperse, sortBy)
 import Data.Map as Map hiding (mapMaybe, map, filter, null, foldr)
-import Data.ByteString.Lazy (unpack)
+import Data.ByteString.Lazy.Char8 (unpack)
 import Data.Bits (testBit)
 import System.IO (openFile, IOMode(ReadMode), Handle)
 import Data.Maybe (mapMaybe)
@@ -42,8 +42,9 @@ data PerfEvent =
    , pid :: Word32       -- process ID
    , tid :: Word32       -- thread ID
    , timestamp :: Word64 -- timestamp in nanoseconds since some arbitrary point
-   }
+   }                     -- in time, probably system boot.
 
+-- Mapping from event ID to event name
 type PerfEventTypeMap = Map Word64 String
 
 -- return a list of perf events in timestamp order, and a mapping from
@@ -53,12 +54,15 @@ perfTrace file = makeTrace `fmap` readPerfData file
 
 makeTrace :: PerfFileContents -> (PerfEventTypeMap, [PerfEvent])
 makeTrace (header, attrs, idss, types, events) =
-   (eventTypeMap, traceSamples eventTypeMap $ sortBy compareSamplePayload $ map ev_payload events)
+   (eventTypeMap, sortedEvents)
    where
+   sortedEvents = mapMaybe mkPerfEvent $
+                     sortBy compareSamplePayload $
+                     map ev_payload events
    -- mapping from type id to type name
    typesMap :: Map Word64 String
    typesMap = fromList typesIDsNames
-   typesIDsNames = map (\t -> (te_event_id t, show $ te_name t)) types
+   typesIDsNames = map (\t -> (te_event_id t, unpack $ te_name t)) types
    -- mapping from event id to type name
    eventTypeMap :: PerfEventTypeMap
    eventTypeMap = makeAttrsMap $ zip (map fa_attr attrs) idss
@@ -70,6 +74,7 @@ makeTrace (header, attrs, idss, types, events) =
          Nothing -> result
          Just name -> foldr (flip Map.insert $ show name) result ids
 
+-- style to use for printing the event data
 data OutputStyle = Dump
 
 -- bit position of sample_id_all in the flags part of event_attr
@@ -157,25 +162,22 @@ dumper (header, attrs, idss, types, events) =
    separator :: Doc
    separator = text $ replicate 40 '-'
 
-prettyIntegral :: Integral a => a -> Doc
-prettyIntegral = int . fromIntegral
-
-traceSamples :: PerfEventTypeMap -> [EventPayload] -> [PerfEvent]
-traceSamples attrMap = mapMaybe $ traceSample attrMap
-
-traceSample :: PerfEventTypeMap -> EventPayload -> Maybe PerfEvent
-traceSample attrMap (se@SampleEvent {})
+-- convert perf event payloads into the PerfEvent representation.
+-- the payload must be a sample which has a process ID, thread ID,
+-- timestamp and identity. Any other payload is skipped.
+mkPerfEvent :: EventPayload -> Maybe PerfEvent
+mkPerfEvent (se@SampleEvent {})
    | Just pid <- se_pid se,
      Just tid <- se_tid se,
      Just timestamp <- se_time se,
      Just identity <- se_id se =
         Just (PerfSample {..})
    | otherwise = Nothing
-traceSample _attrMap otherEvent = Nothing
+mkPerfEvent otherEvent = Nothing
 
-isSampleEvent :: EventPayload -> Bool
-isSampleEvent (SampleEvent {}) = True
-isSampleEvent _other = False
+-- Compare two events based on their timestamp.
+compareSamplePayload :: EventPayload -> EventPayload -> Ordering
+compareSamplePayload e1 e2 = compare (getEventTime e1) (getEventTime e2)
 
 -- Get the timestamp of an event if it has one, otherwise
 -- set it to 0 (for the purposes of sorting them).
@@ -187,6 +189,3 @@ getEventTime e@(ThrottleEvent {}) = te_time e
 getEventTime e@(UnThrottleEvent {}) = ue_time e
 getEventTime other = 0
 
--- Compare two events based on their timestamp.
-compareSamplePayload :: EventPayload -> EventPayload -> Ordering
-compareSamplePayload e1 e2 = compare (getEventTime e1) (getEventTime e2)
