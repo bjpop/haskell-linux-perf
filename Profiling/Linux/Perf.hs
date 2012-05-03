@@ -24,7 +24,7 @@ module Profiling.Linux.Perf
 import Profiling.Linux.Perf.Parse
    ( FileHeader (..), FileAttr (..), TraceEventType (..), Event (..),  EventPayload (..), EventHeader (..)
    , EventAttr (..), readHeader, readAttributes, readAttributeIDs, readEventTypes, readEvent
-   , EventAttrFlag (..), testEventAttrFlag, PID (..), TID (..) )
+   , EventAttrFlag (..), testEventAttrFlag, PID (..), TID (..), EventTypeID (..) )
 import Profiling.Linux.Perf.Pretty ( pretty )
 import Text.PrettyPrint as Pretty
    ( render, Doc, empty, text, (<+>), (<>), vcat, ($$), int, hsep )
@@ -60,7 +60,7 @@ makeTrace (header, attrs, idss, types, events) =
                      sortBy compareSamplePayload $
                      map ev_payload events
    -- mapping from type id to type name
-   typesMap :: Map Word64 String
+   typesMap :: Map EventTypeID String
    typesMap = fromList typesIDsNames
    typesIDsNames = map (\t -> (te_event_id t, unpack $ te_name t)) types
    -- mapping from event id to type name

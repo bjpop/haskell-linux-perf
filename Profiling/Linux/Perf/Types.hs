@@ -28,6 +28,7 @@ module Profiling.Linux.Perf.Types
    , testEventAttrFlag
    , PID (..)
    , TID (..)
+   , EventTypeID (..)
    )where
 
 import Data.Word (Word64, Word32, Word16, Word8, Word)
@@ -38,17 +39,27 @@ import Data.Bits (testBit)
 
 -- -----------------------------------------------------------------------------
 
+-- process ID
 newtype PID = PID { pid :: Word32 }
    deriving (Eq, Ord, Show)
 
 instance Pretty PID where
    pretty (PID pid) = pretty pid
 
+-- thread ID
 newtype TID = TID { tid :: Word32 }
    deriving (Eq, Ord, Show)
 
 instance Pretty TID where
    pretty (TID tid) = pretty tid
+
+-- Event ID
+newtype EventTypeID = EventTypeID { eventTypeID:: Word64 }
+   deriving (Eq, Ord, Show)
+
+instance Pretty EventTypeID where
+   pretty (EventTypeID eid) = pretty eid
+
 
 -- Event data types
 
@@ -268,7 +279,7 @@ data EventAttr
    = EventAttr {
         ea_type :: Word32,   -- Major type: hardware/software/tracepoint/etc.
         ea_size :: Word32,   -- Size of the attr structure, for fwd/bwd compat.
-        ea_config :: Word64, -- Link to .event id of perf trace event type.
+        ea_config :: EventTypeID, -- Link to .event id of perf trace event type.
 
         -- number of events when a sample is generated if .freq
         -- is not set or frequency for sampling if .freq is set
@@ -309,7 +320,7 @@ instance Pretty FileAttr where
       text "ids size:" <+> pretty (fa_ids_size fa)
 
 data TraceEventType = TraceEventType {
-   te_event_id :: Word64, -- This entry belongs to the perf event attr entry where .config
+   te_event_id :: EventTypeID, -- This entry belongs to the perf event attr entry where .config
                           -- has the same value as this id.
    te_name :: ByteString
 }
@@ -335,17 +346,13 @@ instance Pretty EventHeader where
 data EventPayload =
    -- Corresponds with the comm_event struct in <perf source>/util/event.h (without the header)
    CommEvent {
-      -- ce_pid :: Word32,  -- process id
       ce_pid :: PID,  -- process id
-      -- ce_tid :: Word32,  -- thread id
       ce_tid :: TID,  -- thread id
       ce_comm :: ByteString -- name of the application
    }
    -- Corresponds with the mmap_event struct in <perf source>/util/event.h (without the header)
    | MmapEvent {
-      -- me_pid :: Word32,     -- process id
       me_pid :: PID,     -- process id
-      -- me_tid :: Word32,     -- thread id
       me_tid :: TID,     -- thread id
       me_start :: Word64,   -- start of memory range
       me_len :: Word64,     -- size of memory range
@@ -354,25 +361,17 @@ data EventPayload =
    }
    -- Corresponds with the fork_event struct in <perf source>/util/event.h (without the header)
    | ForkEvent {
-      -- fe_pid :: Word32,    -- process id
       fe_pid :: PID,    -- process id
-      -- fe_ppid :: Word32,   -- parent proecess id
       fe_ppid :: PID,   -- parent proecess id
-      -- fe_tid :: Word32,    -- thread id
       fe_tid :: TID,    -- thread id
-      -- fe_ptid :: Word32,   -- parent thread id
       fe_ptid :: TID,   -- parent thread id
       fe_time :: Word64    -- timestamp
    }
    -- Corresponds with the exit_event struct in <perf source>/util/event.h (without the header)
    | ExitEvent {
-      -- ee_pid :: Word32,    -- process id
       ee_pid :: PID,    -- process id
-      -- ee_ppid :: Word32,   -- parent proecess id
       ee_ppid :: PID,   -- parent proecess id
-      --ee_tid :: Word32,    -- thread id
       ee_tid :: TID,    -- thread id
-      -- ee_ptid :: Word32,   -- parent thread id
       ee_ptid :: TID,   -- parent thread id
       ee_time :: Word64    -- timestamp
    }
@@ -383,9 +382,7 @@ data EventPayload =
    }
    -- Corresponds with the read_event struct in <perf source>/util/event.h (without the header)
    | ReadEvent {
-      -- re_pid :: Word32,
       re_pid :: PID,
-      -- re_tid :: Word32,
       re_tid :: TID,
       re_value :: Word64,
       re_time_enabled :: Word64,
@@ -394,9 +391,7 @@ data EventPayload =
    }
    | SampleEvent {
       se_ip :: Maybe Word64,
-      -- se_pid :: Maybe Word32,
       se_pid :: Maybe PID,
-      -- se_tid :: Maybe Word32,
       se_tid :: Maybe TID,
       se_time :: Maybe Word64,
       se_addr :: Maybe Word64,

@@ -27,7 +27,7 @@ module Profiling.Linux.Perf.Parse
 import Profiling.Linux.Perf.Types as Types
    ( FileSection (..), FileHeader (..), EventAttr (..), FileAttr (..), TraceEventType (..)
    , EventHeader (..), EventPayload (..), SampleFormat (..), EventType (..), Event (..)
-   , EventAttrFlag (..), TID (..), PID (..), testEventAttrFlag )
+   , EventAttrFlag (..), TID (..), PID (..), EventTypeID (..), testEventAttrFlag )
 import Data.Word (Word64, Word8, Word16, Word32)
 import Data.Binary (Binary (..), getWord8)
 import Control.Monad.Error (ErrorT (..), lift, replicateM, when, throwError )
@@ -212,7 +212,7 @@ parseEventAttr :: GetEvents EventAttr
 parseEventAttr = do
    ea_type <- getU32
    ea_size <- getU32
-   ea_config <- getU64
+   ea_config <- EventTypeID `fmap` getU64
    ea_sample_period_or_freq <- getU64
    ea_sample_type <- getU64
    ea_read_format <- getU64
@@ -255,7 +255,7 @@ parseFileAttr = do
 
 parseTraceEventType :: GetEvents TraceEventType
 parseTraceEventType = do
-  te_event_id <- getU64
+  te_event_id <- EventTypeID `fmap` getU64
   te_name <- getBSNul
   return TraceEventType{..}
 
