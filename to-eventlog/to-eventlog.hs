@@ -17,6 +17,8 @@ import System.IO (hPutStrLn, stderr)
 import System.Environment (getArgs)
 import Data.Word (Word32)
 import Data.Map (toList)
+import Data.Set as Set (fromList, Set, member)
+import Data.Maybe (mapMaybe)
 
 -- process identity
 type PID = Word32
@@ -41,23 +43,29 @@ perfToEventlog :: PID -> PerfEventTypeMap -> [PerfEvent] -> EventLog
 perfToEventlog pid typeMap events =
    eventLog (perfEventTypes ++ perfEvents)
    where
-   perfEventTypes = typeMapToEvents typeMap
-   perfEvents = map perfToGHC (filter (eventPID pid) events)
+   perfEventTypes = typeMapToEvents eventIDs typeMap
+   perfEvents = map perfToGHC $ filter (eventPID pid) events
+   eventIDs :: Set Word64
+   eventIDs = Set.fromList $ map identity events
 
 -- test if a perf event is for a given process ID
 eventPID :: PID -> PerfEvent -> Bool
 eventPID pidTarget event = pidTarget == pid event
 
--- XXX should only collect only the types that are referred to by events in
+-- only collect only the types that are referred to by events in
 -- the process we are interested in (not all types).
-typeMapToEvents :: PerfEventTypeMap -> [Event]
-typeMapToEvents typeMap = map toPerfName $ toList typeMap
+typeMapToEvents :: Set Word64 -> PerfEventTypeMap -> [Event]
+typeMapToEvents eventTypes typeMap =
+   mapMaybe toPerfName $ toList typeMap
    where
-   toPerfName :: (Word64, String) -> Event
-   toPerfName (identity, eventName) =
-      Event 0 $ PerfName
-                { perfNum = fromIntegral identity
-                , name = eventName }
+   toPerfName :: (Word64, String) -> Maybe Event
+   toPerfName (identity, eventName)
+      | identity `Set.member` eventTypes = 
+           Just $ Event 0 $
+                  PerfName
+                  { perfNum = fromIntegral identity
+                  , name = eventName }
+      | otherwise = Nothing
 
 -- XXX we don't currently generate PerfCounter events, need to find out if
 -- perf records whether an event is a counter or a tracepoint.
