@@ -26,6 +26,8 @@ module Profiling.Linux.Perf.Types
    , TraceEventType (..)
    , EventAttrFlag (..)
    , testEventAttrFlag
+   , PID (..)
+   , TID (..)
    )where
 
 import Data.Word (Word64, Word32, Word16, Word8, Word)
@@ -35,6 +37,19 @@ import Profiling.Linux.Perf.Pretty (Pretty (..), showBits)
 import Data.Bits (testBit)
 
 -- -----------------------------------------------------------------------------
+
+newtype PID = PID { pid :: Word32 }
+   deriving (Eq, Ord, Show)
+
+instance Pretty PID where
+   pretty (PID pid) = pretty pid
+
+newtype TID = TID { tid :: Word32 }
+   deriving (Eq, Ord, Show)
+
+instance Pretty TID where
+   pretty (TID tid) = pretty tid
+
 -- Event data types
 
 {-
@@ -320,14 +335,18 @@ instance Pretty EventHeader where
 data EventPayload =
    -- Corresponds with the comm_event struct in <perf source>/util/event.h (without the header)
    CommEvent {
-      ce_pid :: Word32,  -- process id
-      ce_tid :: Word32,  -- thread id
+      -- ce_pid :: Word32,  -- process id
+      ce_pid :: PID,  -- process id
+      -- ce_tid :: Word32,  -- thread id
+      ce_tid :: TID,  -- thread id
       ce_comm :: ByteString -- name of the application
    }
    -- Corresponds with the mmap_event struct in <perf source>/util/event.h (without the header)
    | MmapEvent {
-      me_pid :: Word32,     -- process id
-      me_tid :: Word32,     -- thread id
+      -- me_pid :: Word32,     -- process id
+      me_pid :: PID,     -- process id
+      -- me_tid :: Word32,     -- thread id
+      me_tid :: TID,     -- thread id
       me_start :: Word64,   -- start of memory range
       me_len :: Word64,     -- size of memory range
       me_pgoff :: Word64,   -- page offset? XXX what is this for?
@@ -335,18 +354,26 @@ data EventPayload =
    }
    -- Corresponds with the fork_event struct in <perf source>/util/event.h (without the header)
    | ForkEvent {
-      fe_pid :: Word32,    -- process id
-      fe_ppid :: Word32,   -- parent proecess id
-      fe_tid :: Word32,    -- thread id
-      fe_ptid :: Word32,   -- parent thread id
+      -- fe_pid :: Word32,    -- process id
+      fe_pid :: PID,    -- process id
+      -- fe_ppid :: Word32,   -- parent proecess id
+      fe_ppid :: PID,   -- parent proecess id
+      -- fe_tid :: Word32,    -- thread id
+      fe_tid :: TID,    -- thread id
+      -- fe_ptid :: Word32,   -- parent thread id
+      fe_ptid :: TID,   -- parent thread id
       fe_time :: Word64    -- timestamp
    }
    -- Corresponds with the exit_event struct in <perf source>/util/event.h (without the header)
    | ExitEvent {
-      ee_pid :: Word32,    -- process id
-      ee_ppid :: Word32,   -- parent proecess id
-      ee_tid :: Word32,    -- thread id
-      ee_ptid :: Word32,   -- parent thread id
+      -- ee_pid :: Word32,    -- process id
+      ee_pid :: PID,    -- process id
+      -- ee_ppid :: Word32,   -- parent proecess id
+      ee_ppid :: PID,   -- parent proecess id
+      --ee_tid :: Word32,    -- thread id
+      ee_tid :: TID,    -- thread id
+      -- ee_ptid :: Word32,   -- parent thread id
+      ee_ptid :: TID,   -- parent thread id
       ee_time :: Word64    -- timestamp
    }
    -- Corresponds with the lost_event struct in <perf source>/util/event.h (without the header)
@@ -356,8 +383,10 @@ data EventPayload =
    }
    -- Corresponds with the read_event struct in <perf source>/util/event.h (without the header)
    | ReadEvent {
-      re_pid :: Word32,
-      re_tid :: Word32,
+      -- re_pid :: Word32,
+      re_pid :: PID,
+      -- re_tid :: Word32,
+      re_tid :: TID,
       re_value :: Word64,
       re_time_enabled :: Word64,
       re_time_running :: Word64,
@@ -365,8 +394,10 @@ data EventPayload =
    }
    | SampleEvent {
       se_ip :: Maybe Word64,
-      se_pid :: Maybe Word32,
-      se_tid :: Maybe Word32,
+      -- se_pid :: Maybe Word32,
+      se_pid :: Maybe PID,
+      -- se_tid :: Maybe Word32,
+      se_tid :: Maybe TID,
       se_time :: Maybe Word64,
       se_addr :: Maybe Word64,
       se_id :: Maybe Word64,

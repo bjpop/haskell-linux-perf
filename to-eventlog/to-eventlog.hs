@@ -11,7 +11,7 @@
 import GHC.RTS.Events hiding (pid)
 import Data.Word
 
-import Profiling.Linux.Perf (PerfEvent (..), perfTrace, PerfEventTypeMap)
+import Profiling.Linux.Perf (PerfEvent (..), perfTrace, PerfEventTypeMap, PID (..), TID (..))
 import System.Exit (exitWith, ExitCode (ExitFailure))
 import System.IO (hPutStrLn, stderr)
 import System.Environment (getArgs)
@@ -19,9 +19,6 @@ import Data.Word (Word32)
 import Data.Map (toList)
 import Data.Set as Set (fromList, Set, member)
 import Data.Maybe (mapMaybe)
-
--- process identity
-type PID = Word32
 
 die :: String -> IO a
 die s = hPutStrLn stderr s >> exitWith (ExitFailure 1)
@@ -34,7 +31,7 @@ main = do
        -- read the linux perf data file
        (perfEventTypeMap, perfEvents) <- perfTrace inF
        -- convert the perf data to ghc events
-       let perfEventlog = perfToEventlog (read pid) perfEventTypeMap perfEvents
+       let perfEventlog = perfToEventlog (PID $ read pid) perfEventTypeMap perfEvents
        -- write the ghc events out to file
        writeEventLogToFile outF perfEventlog
     _ -> die "Syntax: to-eventlog [pid perf_file eventlog_file]"
@@ -46,11 +43,11 @@ perfToEventlog pid typeMap events =
    perfEventTypes = typeMapToEvents eventIDs typeMap
    perfEvents = map perfToGHC $ filter (eventPID pid) events
    eventIDs :: Set Word64
-   eventIDs = Set.fromList $ map identity events
+   eventIDs = Set.fromList $ map perfSample_identity events
 
 -- test if a perf event is for a given process ID
 eventPID :: PID -> PerfEvent -> Bool
-eventPID pidTarget event = pidTarget == pid event
+eventPID pidTarget event = pidTarget == perfSample_pid event
 
 -- only collect only the types that are referred to by events in
 -- the process we are interested in (not all types).
@@ -71,10 +68,10 @@ typeMapToEvents eventTypes typeMap =
 -- perf records whether an event is a counter or a tracepoint.
 perfToGHC :: PerfEvent -> Event
 perfToGHC e@(PerfSample {}) =
-   Event (timestamp e) $
+   Event (perfSample_timestamp e) $
          PerfTracepoint
-         { perfNum = fromIntegral $ identity e
-         , thread = tid e }
+         { perfNum = fromIntegral $ perfSample_identity e
+         , thread = tid $ perfSample_tid e }
 
 eventLog :: [Event] -> EventLog
 eventLog events = EventLog (Header testEventTypes) (Data events)

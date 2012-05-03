@@ -24,7 +24,7 @@ module Profiling.Linux.Perf
 import Profiling.Linux.Perf.Parse
    ( FileHeader (..), FileAttr (..), TraceEventType (..), Event (..),  EventPayload (..), EventHeader (..)
    , EventAttr (..), readHeader, readAttributes, readAttributeIDs, readEventTypes, readEvent
-   , EventAttrFlag (..), testEventAttrFlag )
+   , EventAttrFlag (..), testEventAttrFlag, PID (..), TID (..) )
 import Profiling.Linux.Perf.Pretty ( pretty )
 import Text.PrettyPrint as Pretty
    ( render, Doc, empty, text, (<+>), (<>), vcat, ($$), int, hsep )
@@ -38,10 +38,10 @@ import Data.Maybe (mapMaybe)
 
 data PerfEvent =
    PerfSample
-   { identity :: Word64  -- sample ID
-   , pid :: Word32       -- process ID
-   , tid :: Word32       -- thread ID
-   , timestamp :: Word64 -- timestamp in nanoseconds since some arbitrary point
+   { perfSample_identity :: Word64  -- sample ID
+   , perfSample_pid :: PID -- process ID
+   , perfSample_tid :: TID -- thread ID
+   , perfSample_timestamp :: Word64 -- timestamp in nanoseconds since some arbitrary point
    }                     -- in time, probably system boot.
 
 -- Mapping from event ID to event name
@@ -167,10 +167,10 @@ dumper (header, attrs, idss, types, events) =
 -- timestamp and identity. Any other payload is skipped.
 mkPerfEvent :: EventPayload -> Maybe PerfEvent
 mkPerfEvent (se@SampleEvent {})
-   | Just pid <- se_pid se,
-     Just tid <- se_tid se,
-     Just timestamp <- se_time se,
-     Just identity <- se_id se =
+   | Just perfSample_pid <- se_pid se,
+     Just perfSample_tid <- se_tid se,
+     Just perfSample_timestamp <- se_time se,
+     Just perfSample_identity <- se_id se =
         Just (PerfSample {..})
    | otherwise = Nothing
 mkPerfEvent otherEvent = Nothing

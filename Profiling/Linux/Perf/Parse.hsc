@@ -27,7 +27,7 @@ module Profiling.Linux.Perf.Parse
 import Profiling.Linux.Perf.Types as Types
    ( FileSection (..), FileHeader (..), EventAttr (..), FileAttr (..), TraceEventType (..)
    , EventHeader (..), EventPayload (..), SampleFormat (..), EventType (..), Event (..)
-   , EventAttrFlag (..), testEventAttrFlag )
+   , EventAttrFlag (..), TID (..), PID (..), testEventAttrFlag )
 import Data.Word (Word64, Word8, Word16, Word32)
 import Data.Binary (Binary (..), getWord8)
 import Control.Monad.Error (ErrorT (..), lift, replicateM, when, throwError )
@@ -74,6 +74,12 @@ getU32 = lift getWord32le
 -- read an unsigned 64 bit word
 getU64 :: GetEvents Word64
 getU64 = lift getWord64le
+
+getPID :: GetEvents PID
+getPID = PID `fmap` getU32
+
+getTID :: GetEvents TID 
+getTID = TID `fmap` getU32
 
 runGetEvents :: GetEvents a -> B.ByteString -> Either String a
 runGetEvents = runGet . runErrorT
@@ -282,8 +288,8 @@ parseEventHeader = do
 parseMmapEvent :: GetEvents EventPayload
 parseMmapEvent = do
    -- note we do not parse the event header here, it is done in parseEvent
-   me_pid <- getU32
-   me_tid <- getU32
+   me_pid <- getPID
+   me_tid <- getTID
    me_start <- getU64
    me_len <- getU64
    me_pgoff <- getU64
@@ -300,8 +306,8 @@ parseMmapEvent = do
 
 parseCommEvent :: Word64 -> GetEvents EventPayload
 parseCommEvent sampleType = do
-   ce_pid <- getU32
-   ce_tid <- getU32
+   ce_pid <- getPID
+   ce_tid <- getTID
    ce_comm <- getBSNul
    return CommEvent{..}
 
@@ -316,10 +322,10 @@ parseCommEvent sampleType = do
 
 parseForkEvent :: GetEvents EventPayload
 parseForkEvent = do
-   fe_pid <- getU32
-   fe_ppid <- getU32
-   fe_tid <- getU32
-   fe_ptid <- getU32
+   fe_pid <- getPID
+   fe_ppid <- getPID
+   fe_tid <- getTID
+   fe_ptid <- getTID
    fe_time <- getU64
    return ForkEvent{..}
 
@@ -327,10 +333,10 @@ parseForkEvent = do
 
 parseExitEvent :: GetEvents EventPayload
 parseExitEvent = do
-   ee_pid <- getU32
-   ee_ppid <- getU32
-   ee_tid <- getU32
-   ee_ptid <- getU32
+   ee_pid <- getPID
+   ee_ppid <- getPID
+   ee_tid <- getTID
+   ee_ptid <- getTID
    ee_time <- getU64
    return ExitEvent{..}
 
@@ -385,8 +391,8 @@ parseUnThrottleEvent = do
 
 parseReadEvent :: GetEvents EventPayload
 parseReadEvent = do
-   re_pid <- getU32
-   re_tid <- getU32
+   re_pid <- getPID
+   re_tid <- getTID
    re_value <- getU64
    re_time_enabled <- getU64
    re_time_running <- getU64
@@ -401,8 +407,8 @@ parseSampleType sampleType format parser
 parseSampleEvent :: Word64 -> GetEvents EventPayload
 parseSampleEvent sampleType = do
    se_ip <- parseSampleType sampleType PERF_SAMPLE_IP getU64
-   se_pid <- parseSampleType sampleType PERF_SAMPLE_TID getU32
-   se_tid <- parseSampleType sampleType PERF_SAMPLE_TID getU32
+   se_pid <- parseSampleType sampleType PERF_SAMPLE_TID getPID
+   se_tid <- parseSampleType sampleType PERF_SAMPLE_TID getTID
    se_time <- parseSampleType sampleType PERF_SAMPLE_TIME getU64
    se_addr <- parseSampleType sampleType PERF_SAMPLE_ADDR getU64
    se_id <- parseSampleType sampleType PERF_SAMPLE_ID getU64
