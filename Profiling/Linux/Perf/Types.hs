@@ -29,7 +29,8 @@ module Profiling.Linux.Perf.Types
    , PID (..)
    , TID (..)
    , EventTypeID (..)
-   )where
+   , PerfTypeID (..)
+   ) where
 
 import Data.Word (Word64, Word32, Word16, Word8, Word)
 import Text.PrettyPrint (text, (<+>), ($$), render, empty, integer, (<>), hsep, Doc)
@@ -274,10 +275,26 @@ prettyFlags word = foldr testFlag empty [toEnum 0 ..]
       | testEventAttrFlag word flag = pretty flag <+> rest
       | otherwise = rest
 
--- Corresponds with the perf_event_attr struct in <perf source>/util/perf_event.h
+-- Corresponds with the enum perf_type_id in include/linux/perf_event.h
+-- XXX should really derive this directly from the header
+data PerfTypeID
+   = PerfTypeHardware     -- 0
+   | PerfTypeSoftware     -- 1
+   | PerfTypeTracePoint   -- 2
+   | PerfTypeHwCache      -- 3
+   | PerfTypeRaw          -- 4
+   | PerfTypeBreakpoint   -- 5
+   | PerfTypeUnknown
+   deriving (Eq, Ord, Show, Enum)
+
+instance Pretty PerfTypeID where
+   pretty = text . show
+
+-- Corresponds with the perf_event_attr struct in include/linux/perf_event.h
 data EventAttr
    = EventAttr {
-        ea_type :: Word32,   -- Major type: hardware/software/tracepoint/etc.
+        ea_type :: PerfTypeID,   -- Major type: hardware/software/tracepoint/etc.
+                             -- defined as enum perf_type_id in include/linux/perf_event.h
         ea_size :: Word32,   -- Size of the attr structure, for fwd/bwd compat.
         ea_config :: EventTypeID, -- Link to .event id of perf trace event type.
 

@@ -17,14 +17,13 @@ module Profiling.Linux.Perf
    , readPerfData
    , display
    , perfTrace
-   , PerfEventTypeMap
    , PerfEvent (..)
    ) where
 
 import Profiling.Linux.Perf.Parse
    ( FileHeader (..), FileAttr (..), TraceEventType (..), Event (..),  EventPayload (..), EventHeader (..)
    , EventAttr (..), readHeader, readAttributes, readAttributeIDs, readEventTypes, readEvent
-   , EventAttrFlag (..), testEventAttrFlag, PID (..), TID (..), EventTypeID (..) )
+   , EventAttrFlag (..), testEventAttrFlag, PID (..), TID (..), EventTypeID (..), PerfTypeID (..) )
 import Profiling.Linux.Perf.Pretty ( pretty )
 import Text.PrettyPrint as Pretty
    ( render, Doc, empty, text, (<+>), (<>), vcat, ($$), int, hsep )
@@ -37,42 +36,52 @@ import System.IO (openFile, IOMode(ReadMode), Handle)
 import Data.Maybe (mapMaybe)
 
 data PerfEvent =
-   PerfSample
-   { perfSample_identity :: Word64  -- sample ID
-   , perfSample_pid :: PID -- process ID
-   , perfSample_tid :: TID -- thread ID
-   , perfSample_timestamp :: Word64 -- timestamp in nanoseconds since some arbitrary point
-   }                     -- in time, probably system boot.
+   PerfEvent
+   { perfEvent_identity :: Word64   -- sample ID
+   , perfEvent_pid :: PID           -- process ID
+   , perfEvent_tid :: TID           -- thread ID
+   , perfEvent_timestamp :: Word64  -- timestamp in nanoseconds since some arbitrary point
+                                    -- in time, probably system boot.
+   , perfEvent_type :: PerfTypeID   -- what kind of sample is it? hardware, software, tracepoint etc?
+   , perfEvent_typeName :: String   -- the name of the event type
+   }
 
 -- Mapping from event ID to event name
-type PerfEventTypeMap = Map Word64 String
+type PerfEventTypeMap = Map Word64 (String, PerfTypeID)
 
 -- return a list of perf events in timestamp order, and a mapping from
 -- event ID to the event name
-perfTrace :: FilePath -> IO (PerfEventTypeMap, [PerfEvent])
+perfTrace :: FilePath -> IO [PerfEvent]
 perfTrace file = makeTrace `fmap` readPerfData file
 
-makeTrace :: PerfFileContents -> (PerfEventTypeMap, [PerfEvent])
+makeTrace :: PerfFileContents -> [PerfEvent]
 makeTrace (header, attrs, idss, types, events) =
-   (eventTypeMap, sortedEvents)
+   sortedEvents
    where
-   sortedEvents = mapMaybe mkPerfEvent $
+   sortedEvents = mapMaybe (mkPerfEvent eventTypeMap) $
                      sortBy compareSamplePayload $
                      map ev_payload events
    -- mapping from type id to type name
    typesMap :: Map EventTypeID String
-   typesMap = fromList typesIDsNames
-   typesIDsNames = map (\t -> (te_event_id t, unpack $ te_name t)) types
+   typesMap = fromList [(te_event_id t, unpack $ te_name t) | t <- types]
+   -- typesIDsNames = map (\t -> (te_event_id t, unpack $ te_name t)) types
    -- mapping from event id to type name
    eventTypeMap :: PerfEventTypeMap
    eventTypeMap = makeAttrsMap $ zip (map fa_attr attrs) idss
-   makeAttrsMap :: [(EventAttr, [Word64])] -> Map Word64 String
+   makeAttrsMap :: [(EventAttr, [Word64])] -> PerfEventTypeMap
    makeAttrsMap = foldr idsToName Map.empty
-   idsToName :: (EventAttr, [Word64]) -> Map Word64 String -> Map Word64 String
+   idsToName :: (EventAttr, [Word64]) -> PerfEventTypeMap -> PerfEventTypeMap
    idsToName (attr, ids) result =
-      case Map.lookup (ea_config attr) typesMap of
+      case Map.lookup eventID typesMap of
+         -- We don't have a type name for this particular event.
+         -- This shouldn't happen in a well formatted perf data file, 
+         -- but we ignore it for the moment.
          Nothing -> result
-         Just name -> foldr (flip Map.insert $ show name) result ids
+         -- Update the event type map, mapping each event id to the name.
+         Just name -> foldr (flip Map.insert (name, eventType)) result ids
+      where
+      eventID = ea_config attr   
+      eventType = ea_type attr
 
 -- style to use for printing the event data
 data OutputStyle = Dump
@@ -165,15 +174,25 @@ dumper (header, attrs, idss, types, events) =
 -- convert perf event payloads into the PerfEvent representation.
 -- the payload must be a sample which has a process ID, thread ID,
 -- timestamp and identity. Any other payload is skipped.
-mkPerfEvent :: EventPayload -> Maybe PerfEvent
-mkPerfEvent (se@SampleEvent {})
+mkPerfEvent :: PerfEventTypeMap -> EventPayload -> Maybe PerfEvent
+mkPerfEvent eventTypeMap (se@SampleEvent {})
+{-
    | Just perfSample_pid <- se_pid se,
      Just perfSample_tid <- se_tid se,
      Just perfSample_timestamp <- se_time se,
      Just perfSample_identity <- se_id se =
-        Just (PerfSample {..})
+        Just $ PerfSample {..}
+-}
+   | Just perfEvent_pid <- se_pid se,
+     Just perfEvent_tid <- se_tid se,
+     Just perfEvent_timestamp <- se_time se,
+     Just perfEvent_identity <- se_id se,
+     Just (perfEvent_typeName, perfEvent_type)
+        <- Map.lookup perfEvent_identity eventTypeMap
+        = Just $ PerfEvent {..}
+
    | otherwise = Nothing
-mkPerfEvent otherEvent = Nothing
+mkPerfEvent _eventTypeMap _otherEvent = Nothing
 
 -- Compare two events based on their timestamp.
 compareSamplePayload :: EventPayload -> EventPayload -> Ordering
@@ -188,4 +207,3 @@ getEventTime e@(ExitEvent {}) = ee_time e
 getEventTime e@(ThrottleEvent {}) = te_time e
 getEventTime e@(UnThrottleEvent {}) = ue_time e
 getEventTime other = 0
-

@@ -27,7 +27,8 @@ module Profiling.Linux.Perf.Parse
 import Profiling.Linux.Perf.Types as Types
    ( FileSection (..), FileHeader (..), EventAttr (..), FileAttr (..), TraceEventType (..)
    , EventHeader (..), EventPayload (..), SampleFormat (..), EventType (..), Event (..)
-   , EventAttrFlag (..), TID (..), PID (..), EventTypeID (..), testEventAttrFlag )
+   , EventAttrFlag (..), TID (..), PID (..), EventTypeID (..), testEventAttrFlag
+   , PerfTypeID (..) )
 import Data.Word (Word64, Word8, Word16, Word32)
 import Data.Binary (Binary (..), getWord8)
 import Control.Monad.Error (ErrorT (..), lift, replicateM, when, throwError )
@@ -136,6 +137,27 @@ parseFileHeader = do
     return FileHeader{..}
 
 -- from <system include directory>/linux/perf_event.h
+
+-- enum perf_type_id {
+--        PERF_TYPE_HARDWARE                      = 0,
+--        PERF_TYPE_SOFTWARE                      = 1,
+--        PERF_TYPE_TRACEPOINT                    = 2,
+--        PERF_TYPE_HW_CACHE                      = 3,
+--        PERF_TYPE_RAW                           = 4,
+--        PERF_TYPE_BREAKPOINT                    = 5,
+--
+--        PERF_TYPE_MAX,                          /* non-ABI */
+-- };
+
+readPerfType :: Word32 -> PerfTypeID
+readPerfType x
+   | x < fromIntegral (fromEnum PerfTypeUnknown) = toEnum $ fromIntegral x
+   | otherwise = PerfTypeUnknown
+
+parsePerfTypeID :: GetEvents PerfTypeID
+parsePerfTypeID = readPerfType `fmap` getU32
+
+-- from <system include directory>/linux/perf_event.h
 --
 -- struct perf_event_attr {
 --
@@ -210,7 +232,8 @@ parseFileHeader = do
 
 parseEventAttr :: GetEvents EventAttr
 parseEventAttr = do
-   ea_type <- getU32
+   -- ea_type <- getU32
+   ea_type <- parsePerfTypeID
    ea_size <- getU32
    ea_config <- EventTypeID `fmap` getU64
    ea_sample_period_or_freq <- getU64
