@@ -19,37 +19,57 @@ import Data.Word (Word32)
 import Data.Map (toList)
 import Data.Set as Set (fromList, Set, member, empty, insert, toList)
 import Data.Maybe (mapMaybe)
-
-die :: String -> IO a
-die s = hPutStrLn stderr s >> exitWith (ExitFailure 1)
+import Data.Char (isDigit)
 
 main :: IO ()
 main = do
+  -- read and parse the command line arguments
   args <- getArgs
   case args of
-    [pid, inF, outF] -> do
-       -- read the linux perf data file
-       perfEvents <- perfTrace inF
-       -- convert the perf data to ghc events
-       let perfEventlog = perfToEventlog (PID $ read pid) perfEvents
-       -- write the ghc events out to file
-       writeEventLogToFile outF perfEventlog
+    [pidStr, inF, outF] ->
+       case parsePID pidStr of
+          Nothing -> die "Invalid PID argument, must be an integer"
+          Just pid -> do
+             -- read the linux perf data file
+             perfEvents <- perfTrace inF
+             -- convert the perf data to ghc events
+             let perfEventlog = perfToEventlog pid perfEvents
+             -- write the ghc events out to file
+             writeEventLogToFile outF perfEventlog
     _ -> die "Syntax: to-eventlog [pid perf_file eventlog_file]"
 
+-- exit the program with an error message
+die :: String -> IO a
+die s = hPutStrLn stderr s >> exitWith (ExitFailure 1)
+
+-- parse the command line input for a valid process ID
+parsePID :: String -> Maybe PID
+parsePID str
+   | length str > 0 && all isDigit str = Just $ PID $ read str
+   | otherwise = Nothing
+
+-- convert a list of linux perf events into a ghc event log
 perfToEventlog :: PID -> [PerfEvent] -> EventLog
 perfToEventlog pid events =
    eventLog $ perfToGHC pid events
 
+-- Perf type name and identity
 type PerfTypeInfo = (String, Word32)
 
 perfToGHC :: PID -> [PerfEvent] -> [Event]
 perfToGHC pid perfEvents =
    typeEvents ++ reverse events 
    where
+   -- we fold over the list of perf events and collect a set of
+   -- event types and a list of ghc events
+   (typeEventSet, events) = foldl perfToGHCWorker (Set.empty, []) perfEvents
+   -- convert the set of perf type infos into a list of events
+   typeEvents :: [Event]
    typeEvents = mkTypeEvents $ Set.toList typeEventSet
    mkTypeEvents :: [(String, Word32)] -> [Event]
    mkTypeEvents = map (\(name, id) -> Event 0 $ PerfName id name)
-   (typeEventSet, events) = foldl perfToGHCWorker (Set.empty, []) perfEvents
+   -- extract a new type event and ghc event from the next perf event
+   -- and update the state
    perfToGHCWorker :: (Set PerfTypeInfo, [Event]) -> PerfEvent -> (Set PerfTypeInfo, [Event])
    perfToGHCWorker (nameSet, events)
                    (PerfEvent
@@ -62,6 +82,7 @@ perfToGHC pid perfEvents =
                     })
       -- test if the event belongs to the process of interest
       | perfPID /= pid = (nameSet, events)
+      -- collect the type of event and also the ghc event information
       | otherwise = (newNameSet, newEvent : events)
       where
       newNameSet = Set.insert newNameInfo nameSet
@@ -69,30 +90,16 @@ perfToGHC pid perfEvents =
       newEvent = Event perfTimestamp newEventBody
       ghcTID = fromIntegral $ tid perfTID
       ghcID = fromIntegral perfID 
+      -- generate the appropriate ghc event
       newEventBody
+         -- it is a tracepoint
          | perfType == PerfTypeTracePoint = PerfTracepoint ghcID ghcTID
+         -- it is some kind of counter
          | otherwise = PerfCounter ghcID 0 -- XXX count is incorrect
 
 -- test if a perf event is for a given process ID
 eventPID :: PID -> PerfEvent -> Bool
 eventPID pidTarget event = pidTarget == perfEvent_pid event
-
-{-
--- only collect only the types that are referred to by events in
--- the process we are interested in (not all types).
-typeMapToEvents :: Set Word64 -> PerfEventTypeMap -> [Event]
-typeMapToEvents eventTypes typeMap =
-   mapMaybe toPerfName $ toList typeMap
-   where
-   toPerfName :: (Word64, String) -> Maybe Event
-   toPerfName (identity, eventName)
-      | identity `Set.member` eventTypes = 
-           Just $ Event 0 $
-                  PerfName
-                  { perfNum = fromIntegral identity
-                  , name = eventName }
-      | otherwise = Nothing
--}
 
 eventLog :: [Event] -> EventLog
 eventLog events = EventLog (Header testEventTypes) (Data events)
@@ -121,15 +128,3 @@ sz_perf_num = 4
 
 sz_tid :: EventTypeSize
 sz_tid  = 4
-
-{-
-test :: EventLog
-test = eventLog $
-  [ Event 0 (PerfName 0 "L2 cache misses")
-  , Event 1000 (PerfCounter 0 1)
-  , Event 1100 (PerfCounter 0 2)
-  , Event 2000 (PerfName 1 "kill")
-  , Event 2100 (PerfCounter 0 3)
-  , Event 2200 (PerfTracepoint 1 0)
-  ]
--}
