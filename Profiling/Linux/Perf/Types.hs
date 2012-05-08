@@ -276,7 +276,8 @@ prettyFlags word = foldr testFlag empty [toEnum 0 ..]
       | otherwise = rest
 
 -- Corresponds with the enum perf_type_id in include/linux/perf_event.h
--- XXX should really derive this directly from the header
+-- XXX this type might more meaningfully be called EventSource
+-- XXX should really derive this directly from the header file
 data PerfTypeID
    = PerfTypeHardware     -- 0
    | PerfTypeSoftware     -- 1

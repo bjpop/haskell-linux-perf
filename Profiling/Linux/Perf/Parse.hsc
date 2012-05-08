@@ -35,7 +35,8 @@ import Control.Monad.Error (ErrorT (..), lift, replicateM, when, throwError )
 import System.IO (hSeek, Handle, SeekMode (..))
 import Data.ByteString.Lazy as B (ByteString, hGet)
 import Data.Binary.Get
-   (Get, runGet, getLazyByteString, getLazyByteStringNul, getWord16le, getWord32le, getWord64le, remaining, getRemainingLazyByteString)
+   (Get, runGet, getLazyByteString, getLazyByteStringNul, getWord16le,
+    getWord32le, getWord64le, remaining, getRemainingLazyByteString)
 import Data.Bits (testBit)
 import Foreign.Storable (sizeOf)
 import Data.Int (Int64)
@@ -76,9 +77,11 @@ getU32 = lift getWord32le
 getU64 :: GetEvents Word64
 getU64 = lift getWord64le
 
+-- read a process ID as a 32 bit word and return PID type
 getPID :: GetEvents PID
 getPID = PID `fmap` getU32
 
+-- read a thread ID as a 32 bit word and return TID type
 getTID :: GetEvents TID 
 getTID = TID `fmap` getU32
 
@@ -509,16 +512,6 @@ readAttributeIDs h attr = do
    -- b <- B.hGet h (size * bytesInWord64)
    b <- B.hGet h size
    runGetEventsCheck (replicateM (size `div` bytesInWord64) getU64) b
-
-{-
-readEventTypes :: Handle -> FileHeader -> IO [TraceEventType]
-readEventTypes h fh = do
-   let sizeOfTypeRecord = #size struct perf_trace_event_type
-   let nr_types = fh_event_size fh `quot` sizeOfTypeRecord
-   hSeek h AbsoluteSeek (fromIntegral (fh_event_offset fh))
-   b <- B.hGet h (fromIntegral (fh_event_size fh))
-   runGetEventsCheck (replicateM (fromIntegral nr_types) parseTraceEventType) b
--}
 
 readEventTypes :: Handle -> FileHeader -> IO [TraceEventType]
 readEventTypes h fh = do

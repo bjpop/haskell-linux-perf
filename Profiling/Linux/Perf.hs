@@ -56,11 +56,10 @@ perfTrace file = makeTrace `fmap` readPerfData file
 
 makeTrace :: PerfFileContents -> [PerfEvent]
 makeTrace (header, attrs, idss, types, events) =
-   sortedEvents
+   mapMaybe (mkPerfEvent eventTypeMap) $
+      sortBy compareSamplePayload $
+      map ev_payload events
    where
-   sortedEvents = mapMaybe (mkPerfEvent eventTypeMap) $
-                     sortBy compareSamplePayload $
-                     map ev_payload events
    -- mapping from type id to type name
    typesMap :: Map EventTypeID String
    typesMap = fromList [(te_event_id t, unpack $ te_name t) | t <- types]
@@ -106,8 +105,6 @@ readPerfData file = do
    attrs <- readAttributes h header
    idss <- mapM (readAttributeIDs h) attrs
    types <- readEventTypes h header
-   -- let (sampleType, sampleIdAll) = getSampleTypeAndIdAll attrs
-   -- it is not clear what to do if there is more than one, or even if that is valid.
    -- See: samplingType in perffile/session.c and the way it is set in the CERN readperf code.
    -- They also assume there is just one sampleType.
    let attrTypeInfo = getAttrInfo attrs
@@ -117,7 +114,6 @@ readPerfData file = do
              x:_ -> x
        dataOffset = fh_data_offset header
        maxOffset = fh_data_size header + dataOffset
-   -- print attrTypeInfo
    events <- readEvents h maxOffset dataOffset sampleType
    return (header, attrs, idss, types, events)
 
@@ -176,13 +172,6 @@ dumper (header, attrs, idss, types, events) =
 -- timestamp and identity. Any other payload is skipped.
 mkPerfEvent :: PerfEventTypeMap -> EventPayload -> Maybe PerfEvent
 mkPerfEvent eventTypeMap (se@SampleEvent {})
-{-
-   | Just perfSample_pid <- se_pid se,
-     Just perfSample_tid <- se_tid se,
-     Just perfSample_timestamp <- se_time se,
-     Just perfSample_identity <- se_id se =
-        Just $ PerfSample {..}
--}
    | Just perfEvent_pid <- se_pid se,
      Just perfEvent_tid <- se_tid se,
      Just perfEvent_timestamp <- se_time se,
