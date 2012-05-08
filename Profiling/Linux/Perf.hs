@@ -1,7 +1,7 @@
 {-# LANGUAGE RecordWildCards, PatternGuards #-}
 -----------------------------------------------------------------------------
 -- |
--- Copyright   : (c) 2010,2011,2012 Simon Marlow, Bernie Pope
+-- Copyright   : (c) 2010,2011,2012 Simon Marlow, Bernie Pope, Mikolaj Konarski
 -- License     : BSD-style
 -- Maintainer  : florbitous@gmail.com
 -- Stability   : experimental
