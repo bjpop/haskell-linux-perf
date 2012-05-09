@@ -1,4 +1,3 @@
-{-# LANGUAGE RecordWildCards, PatternGuards #-}
 -----------------------------------------------------------------------------
 -- |
 -- Copyright   : (c) 2010,2011,2012 Simon Marlow, Bernie Pope, Mikolaj Konarski
@@ -16,8 +15,8 @@ module Profiling.Linux.Perf
    , readAndDisplay
    , readPerfData
    , display
-   , perfTrace
-   , PerfEvent (..)
+   -- , perfTrace
+   -- , PerfEvent (..)
    ) where
 
 import Profiling.Linux.Perf.Parse
@@ -28,13 +27,15 @@ import Profiling.Linux.Perf.Pretty ( pretty )
 import Text.PrettyPrint as Pretty
    ( render, Doc, empty, text, (<+>), (<>), vcat, ($$), int, hsep )
 import Data.Word (Word64, Word32)
-import Data.List (intersperse, sortBy)
+import Data.List (intersperse)
 import Data.Map as Map hiding (mapMaybe, map, filter, null, foldr)
-import Data.ByteString.Lazy.Char8 (unpack)
+--import Data.ByteString.Lazy.Char8 (unpack)
 import Data.Bits (testBit)
 import System.IO (openFile, IOMode(ReadMode), Handle)
 import Data.Maybe (mapMaybe)
 
+{-
+-- XXX this should move to to-eventlog (and perhaps even be deforested)
 data PerfEvent =
    PerfEvent
    { perfEvent_identity :: Word64   -- sample ID
@@ -63,7 +64,6 @@ makeTrace (header, attrs, idss, types, events) =
    -- mapping from type id to type name
    typesMap :: Map EventTypeID String
    typesMap = fromList [(te_event_id t, unpack $ te_name t) | t <- types]
-   -- typesIDsNames = map (\t -> (te_event_id t, unpack $ te_name t)) types
    -- mapping from event id to type name
    eventTypeMap :: PerfEventTypeMap
    eventTypeMap = makeAttrsMap $ zip (map fa_attr attrs) idss
@@ -81,6 +81,7 @@ makeTrace (header, attrs, idss, types, events) =
       where
       eventID = ea_config attr   
       eventType = ea_type attr
+-}
 
 -- style to use for printing the event data
 data OutputStyle = Dump
@@ -167,6 +168,7 @@ dumper (header, attrs, idss, types, events) =
    separator :: Doc
    separator = text $ replicate 40 '-'
 
+{-
 -- convert perf event payloads into the PerfEvent representation.
 -- the payload must be a sample which has a process ID, thread ID,
 -- timestamp and identity. Any other payload is skipped.
@@ -182,7 +184,10 @@ mkPerfEvent eventTypeMap (se@SampleEvent {})
 
    | otherwise = Nothing
 mkPerfEvent _eventTypeMap _otherEvent = Nothing
+-}
 
+
+{-
 -- Compare two events based on their timestamp.
 compareSamplePayload :: EventPayload -> EventPayload -> Ordering
 compareSamplePayload e1 e2 = compare (getEventTime e1) (getEventTime e2)
@@ -196,3 +201,4 @@ getEventTime e@(ExitEvent {}) = ee_time e
 getEventTime e@(ThrottleEvent {}) = te_time e
 getEventTime e@(UnThrottleEvent {}) = ue_time e
 getEventTime other = 0
+-}
