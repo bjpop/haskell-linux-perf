@@ -28,7 +28,7 @@ import Profiling.Linux.Perf.Types as Types
    ( FileSection (..), FileHeader (..), EventAttr (..), FileAttr (..), TraceEventType (..)
    , EventHeader (..), EventPayload (..), SampleFormat (..), EventType (..), Event (..)
    , EventAttrFlag (..), TID (..), PID (..), EventTypeID (..), testEventAttrFlag
-   , PerfTypeID (..) )
+   , EventSource (..), EventID (..) )
 import Data.Word (Word64, Word8, Word16, Word32)
 import Data.Binary (Binary (..), getWord8)
 import Control.Monad.Error (ErrorT (..), lift, replicateM, when, throwError )
@@ -84,6 +84,10 @@ getPID = PID `fmap` getU32
 -- read a thread ID as a 32 bit word and return TID type
 getTID :: GetEvents TID 
 getTID = TID `fmap` getU32
+
+-- read an event ID as a 64 bit word and return EventID type
+getEventID :: GetEvents EventID 
+getEventID = EventID `fmap` getU64
 
 runGetEvents :: GetEvents a -> B.ByteString -> Either String a
 runGetEvents = runGet . runErrorT
@@ -152,13 +156,13 @@ parseFileHeader = do
 --        PERF_TYPE_MAX,                          /* non-ABI */
 -- };
 
-readPerfType :: Word32 -> PerfTypeID
+readPerfType :: Word32 -> EventSource
 readPerfType x
    | x < fromIntegral (fromEnum PerfTypeUnknown) = toEnum $ fromIntegral x
    | otherwise = PerfTypeUnknown
 
-parsePerfTypeID :: GetEvents PerfTypeID
-parsePerfTypeID = readPerfType `fmap` getU32
+parseEventSource :: GetEvents EventSource
+parseEventSource = readPerfType `fmap` getU32
 
 -- from <system include directory>/linux/perf_event.h
 --
@@ -236,7 +240,7 @@ parsePerfTypeID = readPerfType `fmap` getU32
 parseEventAttr :: GetEvents EventAttr
 parseEventAttr = do
    -- ea_type <- getU32
-   ea_type <- parsePerfTypeID
+   ea_type <- parseEventSource
    ea_size <- getU32
    ea_config <- EventTypeID `fmap` getU64
    ea_sample_period_or_freq <- getU64
@@ -376,7 +380,8 @@ parseExitEvent = do
 
 parseLostEvent :: GetEvents EventPayload
 parseLostEvent = do
-   le_id <- getU64
+   -- le_id <- getU64
+   le_id <- getEventID
    le_lost <- getU64
    return LostEvent{..}
 
@@ -393,14 +398,16 @@ parseLostEvent = do
 parseThrottleEvent :: GetEvents EventPayload
 parseThrottleEvent = do
    te_time <- getU64
-   te_id <- getU64
+   -- te_id <- getU64
+   te_id <- getEventID
    te_stream_id <- getU64
    return ThrottleEvent{..}
 
 parseUnThrottleEvent :: GetEvents EventPayload
 parseUnThrottleEvent = do
    ue_time <- getU64
-   ue_id <- getU64
+   -- ue_id <- getU64
+   ue_id <- getEventID
    ue_stream_id <- getU64
    return UnThrottleEvent{..}
 
@@ -422,7 +429,8 @@ parseReadEvent = do
    re_value <- getU64
    re_time_enabled <- getU64
    re_time_running <- getU64
-   re_id <- getU64
+   -- re_id <- getU64
+   re_id <- getEventID
    return ReadEvent{..}
 
 parseSampleType :: Word64 -> SampleFormat -> GetEvents a -> GetEvents (Maybe a)
@@ -437,7 +445,8 @@ parseSampleEvent sampleType = do
    se_tid <- parseSampleType sampleType PERF_SAMPLE_TID getTID
    se_time <- parseSampleType sampleType PERF_SAMPLE_TIME getU64
    se_addr <- parseSampleType sampleType PERF_SAMPLE_ADDR getU64
-   se_id <- parseSampleType sampleType PERF_SAMPLE_ID getU64
+   -- se_id <- parseSampleType sampleType PERF_SAMPLE_ID getU64
+   se_id <- parseSampleType sampleType PERF_SAMPLE_ID getEventID
    se_streamid <- parseSampleType sampleType PERF_SAMPLE_STREAM_ID getU64
    se_cpu <- parseSampleType sampleType PERF_SAMPLE_CPU getU32
    se_period <- parseSampleType sampleType PERF_SAMPLE_PERIOD getU64
@@ -504,14 +513,15 @@ readAttributes h fh = do
    b <- B.hGet h (fromIntegral (fh_attrs_size fh))
    runGetEventsCheck (replicateM (fromIntegral nr_attrs) parseFileAttr) b
 
-readAttributeIDs :: Handle -> FileAttr -> IO [Word64]
+readAttributeIDs :: Handle -> FileAttr -> IO [EventID]
 readAttributeIDs h attr = do
    let offset = fromIntegral $ fa_ids_offset attr
        size = fromIntegral $ fa_ids_size attr
    hSeek h AbsoluteSeek offset
    -- b <- B.hGet h (size * bytesInWord64)
    b <- B.hGet h size
-   runGetEventsCheck (replicateM (size `div` bytesInWord64) getU64) b
+   ws <- runGetEventsCheck (replicateM (size `div` bytesInWord64) getU64) b
+   return $ map EventID ws
 
 readEventTypes :: Handle -> FileHeader -> IO [TraceEventType]
 readEventTypes h fh = do

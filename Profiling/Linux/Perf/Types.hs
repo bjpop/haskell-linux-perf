@@ -1,3 +1,4 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 -----------------------------------------------------------------------------
 -- |
 -- Copyright   : (c) 2010,2011,2012 Simon Marlow, Bernie Pope, Mikolaj Konarski
@@ -29,7 +30,8 @@ module Profiling.Linux.Perf.Types
    , PID (..)
    , TID (..)
    , EventTypeID (..)
-   , PerfTypeID (..)
+   , EventSource (..)
+   , EventID (..)
    ) where
 
 import Data.Word (Word64, Word32, Word16, Word8, Word)
@@ -42,25 +44,20 @@ import Data.Bits (testBit)
 
 -- process ID
 newtype PID = PID { pid :: Word32 }
-   deriving (Eq, Ord, Show)
-
-instance Pretty PID where
-   pretty (PID pid) = pretty pid
+   deriving (Eq, Ord, Show, Pretty)
 
 -- thread ID
 newtype TID = TID { tid :: Word32 }
-   deriving (Eq, Ord, Show)
+   deriving (Eq, Ord, Show, Pretty)
 
-instance Pretty TID where
-   pretty (TID tid) = pretty tid
+-- event type ID (magic unique number of an event type)
+newtype EventTypeID = EventTypeID { eventTypeID :: Word64 }
+   deriving (Eq, Ord, Show, Pretty)
 
--- Event ID
-newtype EventTypeID = EventTypeID { eventTypeID:: Word64 }
-   deriving (Eq, Ord, Show)
+-- event ID
 
-instance Pretty EventTypeID where
-   pretty (EventTypeID eid) = pretty eid
-
+newtype EventID = EventID { eventID :: Word64 }
+   deriving (Eq, Ord, Show, Pretty)
 
 -- Event data types
 
@@ -276,9 +273,8 @@ prettyFlags word = foldr testFlag empty [toEnum 0 ..]
       | otherwise = rest
 
 -- Corresponds with the enum perf_type_id in include/linux/perf_event.h
--- XXX this type might more meaningfully be called EventSource
 -- XXX should really derive this directly from the header file
-data PerfTypeID
+data EventSource
    = PerfTypeHardware     -- 0
    | PerfTypeSoftware     -- 1
    | PerfTypeTracePoint   -- 2
@@ -288,13 +284,13 @@ data PerfTypeID
    | PerfTypeUnknown
    deriving (Eq, Ord, Show, Enum)
 
-instance Pretty PerfTypeID where
+instance Pretty EventSource where
    pretty = text . show
 
 -- Corresponds with the perf_event_attr struct in include/linux/perf_event.h
 data EventAttr
    = EventAttr {
-        ea_type :: PerfTypeID,   -- Major type: hardware/software/tracepoint/etc.
+        ea_type :: EventSource,   -- Major type: hardware/software/tracepoint/etc.
                              -- defined as enum perf_type_id in include/linux/perf_event.h
         ea_size :: Word32,   -- Size of the attr structure, for fwd/bwd compat.
         ea_config :: EventTypeID, -- Link to .event id of perf trace event type.
@@ -395,7 +391,7 @@ data EventPayload =
    }
    -- Corresponds with the lost_event struct in <perf source>/util/event.h (without the header)
    | LostEvent {
-      le_id :: Word64,
+      le_id :: EventID,
       le_lost :: Word64
    }
    -- Corresponds with the read_event struct in <perf source>/util/event.h (without the header)
@@ -405,7 +401,7 @@ data EventPayload =
       re_value :: Word64,
       re_time_enabled :: Word64,
       re_time_running :: Word64,
-      re_id :: Word64
+      re_id :: EventID 
    }
    | SampleEvent {
       se_ip :: Maybe Word64,
@@ -413,7 +409,7 @@ data EventPayload =
       se_tid :: Maybe TID,
       se_time :: Maybe Word64,
       se_addr :: Maybe Word64,
-      se_id :: Maybe Word64,
+      se_id :: Maybe EventID,
       se_streamid :: Maybe Word64,
       se_cpu :: Maybe Word32,
       se_period :: Maybe Word64
@@ -423,12 +419,12 @@ data EventPayload =
    -- but does not appear in <perf source>/util/event.h
    | ThrottleEvent {
       te_time :: Word64,
-      te_id :: Word64,
+      te_id :: EventID,
       te_stream_id :: Word64
    }
    | UnThrottleEvent {
       ue_time :: Word64,
-      ue_id :: Word64,
+      ue_id :: EventID,
       ue_stream_id :: Word64
    }
    | UnknownEvent -- Something to return if we find PERF_RECORD_UNKNOWN
