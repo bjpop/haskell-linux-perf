@@ -16,7 +16,7 @@ import Profiling.Linux.Perf as Perf
    ( readPerfData, PID (..), TID (..), EventSource (..), PerfData (..)
    , EventPayload (..), Event (..), EventTypeID (..), TraceEventType (..)
    , FileAttr (..), EventAttr (..), makeTypeMap, sortEventsOnTime
-   , TypeMap, TypeInfo (..) )
+   , TypeMap, TypeInfo (..), TimeStamp (..) )
 import Control.Monad (when)
 import System.Exit (exitWith, ExitCode (ExitFailure))
 import System.IO (hPutStrLn, stderr)
@@ -93,10 +93,10 @@ perfToGHC targetPID typeMap perfEvents =
    perfToGHCWorker :: EventState -> EventPayload -> EventState 
    perfToGHCWorker state@(typeSet, events) se@(SampleEvent {}) = 
       maybe state id $ do
-         eventPID <- se_pid se
-         eventTID <- se_tid se
-         eventID <- se_id se 
-         eventTime <- se_time se
+         eventPID <- eventPayload_SamplePID se
+         eventTID <- eventPayload_SampleTID se
+         eventID <- eventPayload_SampleID se 
+         eventTime <- eventPayload_SampleTime se
          if (eventPID == targetPID) then do
             -- lookup the event type for this event
             TypeInfo typeName typeSource typeID <- Map.lookup eventID typeMap
@@ -104,7 +104,7 @@ perfToGHC targetPID typeMap perfEvents =
                 ghcTID = fromIntegral $ tid eventTID
                 ghcTypeID = fromIntegral $ eventTypeID typeID
                 -- generate the appropriate ghc event
-                newEvent = GHC.Event eventTime newEventBody
+                newEvent = GHC.Event (timeStamp eventTime) newEventBody
                 newEventBody
                    -- it is a tracepoint
                    | typeSource == PerfTypeTracePoint = PerfTracepoint ghcTypeID ghcTID

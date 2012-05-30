@@ -32,6 +32,7 @@ module Profiling.Linux.Perf.Types
    , EventTypeID (..)
    , EventSource (..)
    , EventID (..)
+   , TimeStamp (..)
    ) where
 
 import Data.Word (Word64, Word32, Word16, Word8, Word)
@@ -55,8 +56,13 @@ newtype EventTypeID = EventTypeID { eventTypeID :: Word64 }
    deriving (Eq, Ord, Show, Pretty)
 
 -- event ID
-
+-- Not really an identity. This number is used to link
+-- an event to an event type. Multiple events can have the same EventID,
+-- which means they all have the same event type.
 newtype EventID = EventID { eventID :: Word64 }
+   deriving (Eq, Ord, Show, Pretty)
+
+newtype TimeStamp = TimeStamp { timeStamp :: Word64 }
    deriving (Eq, Ord, Show, Pretty)
 
 -- Event data types
@@ -360,119 +366,119 @@ instance Pretty EventHeader where
 data EventPayload =
    -- Corresponds with the comm_event struct in <perf source>/util/event.h (without the header)
    CommEvent {
-      ce_pid :: PID,  -- process id
-      ce_tid :: TID,  -- thread id
-      ce_comm :: ByteString -- name of the application
+      eventPayload_pid :: PID,            -- process id
+      eventPayload_tid :: TID,            -- thread id
+      eventPayload_CommName :: ByteString -- name of the application
    }
    -- Corresponds with the mmap_event struct in <perf source>/util/event.h (without the header)
    | MmapEvent {
-      me_pid :: PID,     -- process id
-      me_tid :: TID,     -- thread id
-      me_start :: Word64,   -- start of memory range
-      me_len :: Word64,     -- size of memory range
-      me_pgoff :: Word64,   -- page offset? XXX what is this for?
-      me_filename :: ByteString -- binary file using this range
+      eventPayload_pid :: PID,                -- process id
+      eventPayload_tid :: TID,                -- thread id
+      eventPayload_MmapStart :: Word64,       -- start of memory range
+      eventPayload_MmapLen :: Word64,         -- size of memory range
+      eventPayload_MmapPgoff :: Word64,       -- page offset? XXX what is this for?
+      eventPayload_MmapFilename :: ByteString -- binary file using this range
    }
    -- Corresponds with the fork_event struct in <perf source>/util/event.h (without the header)
    | ForkEvent {
-      fe_pid :: PID,    -- process id
-      fe_ppid :: PID,   -- parent proecess id
-      fe_tid :: TID,    -- thread id
-      fe_ptid :: TID,   -- parent thread id
-      fe_time :: Word64    -- timestamp
+      eventPayload_pid :: PID,       -- process id
+      eventPayload_ppid :: PID,      -- parent proecess id
+      eventPayload_tid :: TID,       -- thread id
+      eventPayload_ptid :: TID,      -- parent thread id
+      eventPayload_time :: TimeStamp -- timestamp
    }
    -- Corresponds with the exit_event struct in <perf source>/util/event.h (without the header)
    | ExitEvent {
-      ee_pid :: PID,    -- process id
-      ee_ppid :: PID,   -- parent proecess id
-      ee_tid :: TID,    -- thread id
-      ee_ptid :: TID,   -- parent thread id
-      ee_time :: Word64    -- timestamp
+      eventPayload_pid :: PID,       -- process id
+      eventPayload_ppid :: PID,      -- parent proecess id
+      eventPayload_tid :: TID,       -- thread id
+      eventPayload_ptid :: TID,      -- parent thread id
+      eventPayload_time :: TimeStamp -- timestamp
    }
    -- Corresponds with the lost_event struct in <perf source>/util/event.h (without the header)
    | LostEvent {
-      le_id :: EventID,
-      le_lost :: Word64
+      eventPayload_id :: EventID,
+      eventPayload_Lost :: Word64
    }
    -- Corresponds with the read_event struct in <perf source>/util/event.h (without the header)
    | ReadEvent {
-      re_pid :: PID,
-      re_tid :: TID,
-      re_value :: Word64,
-      re_time_enabled :: Word64,
-      re_time_running :: Word64,
-      re_id :: EventID 
+      eventPayload_pid :: PID,
+      eventPayload_tid :: TID,
+      eventPayload_ReadValue :: Word64,
+      eventPayload_ReadTimeEnabled :: Word64,
+      eventPayload_ReadTimeRunning :: Word64,
+      eventPayload_id :: EventID 
    }
    | SampleEvent {
-      se_ip :: Maybe Word64,
-      se_pid :: Maybe PID,
-      se_tid :: Maybe TID,
-      se_time :: Maybe Word64,
-      se_addr :: Maybe Word64,
-      se_id :: Maybe EventID,
-      se_streamid :: Maybe Word64,
-      se_cpu :: Maybe Word32,
-      se_period :: Maybe Word64
+      eventPayload_SampleIP :: Maybe Word64,
+      eventPayload_SamplePID :: Maybe PID,
+      eventPayload_SampleTID :: Maybe TID,
+      eventPayload_SampleTime :: Maybe TimeStamp,
+      eventPayload_SampleAddr :: Maybe Word64,
+      eventPayload_SampleID :: Maybe EventID,
+      eventPayload_SampleStreamID :: Maybe Word64,
+      eventPayload_SampleCPU :: Maybe Word32,
+      eventPayload_SamplePeriod :: Maybe Word64
    }
    -- ThrottleEvent and UnThrottleEvent are mentioned in
    -- <system include directory>/linux/perf_event.h
    -- but does not appear in <perf source>/util/event.h
    | ThrottleEvent {
-      te_time :: Word64,
-      te_id :: EventID,
-      te_stream_id :: Word64
+      eventPayload_time :: TimeStamp,
+      eventPayload_id :: EventID,
+      eventPayload_stream_id :: Word64
    }
    | UnThrottleEvent {
-      ue_time :: Word64,
-      ue_id :: EventID,
-      ue_stream_id :: Word64
+      eventPayload_time :: TimeStamp,
+      eventPayload_id :: EventID,
+      eventPayload_stream_id :: Word64
    }
    | UnknownEvent -- Something to return if we find PERF_RECORD_UNKNOWN
    deriving (Show)
 
 instance Pretty EventPayload where
    pretty ce@(CommEvent{}) =
-      text "pid:" <+> pretty (ce_pid ce) $$
-      text "tid:" <+> pretty (ce_tid ce) $$
-      text "comm:" <+> pretty (ce_comm ce)
+      text "pid:" <+> pretty (eventPayload_pid ce) $$
+      text "tid:" <+> pretty (eventPayload_tid ce) $$
+      text "comm:" <+> pretty (eventPayload_CommName ce)
    pretty me@(MmapEvent{}) =
-      text "pid:" <+> pretty (me_pid me) $$
-      text "tid:" <+> pretty (me_tid me) $$
-      text "start:" <+> pretty (me_start me) $$
-      text "len:" <+> pretty (me_len me) $$
-      text "pgoff:" <+> pretty (me_pgoff me) $$
-      text "filename:" <+> pretty (me_filename me)
+      text "pid:" <+> pretty (eventPayload_pid me) $$
+      text "tid:" <+> pretty (eventPayload_tid me) $$
+      text "start:" <+> pretty (eventPayload_MmapStart me) $$
+      text "len:" <+> pretty (eventPayload_MmapLen me) $$
+      text "pgoff:" <+> pretty (eventPayload_MmapPgoff me) $$
+      text "filename:" <+> pretty (eventPayload_MmapFilename me)
    pretty fe@(ForkEvent{}) =
-      text "pid:" <+> pretty (fe_pid fe) $$
-      text "ppid:" <+> pretty (fe_ppid fe) $$
-      text "tid:" <+> pretty (fe_tid fe) $$
-      text "ptid:" <+> pretty (fe_ptid fe) $$
-      text "time:" <+> pretty (fe_time fe)
+      text "pid:" <+> pretty (eventPayload_pid fe) $$
+      text "ppid:" <+> pretty (eventPayload_ppid fe) $$
+      text "tid:" <+> pretty (eventPayload_tid fe) $$
+      text "ptid:" <+> pretty (eventPayload_ptid fe) $$
+      text "time:" <+> pretty (eventPayload_time fe)
    pretty ee@(ExitEvent{}) =
-      text "pid:" <+> pretty (ee_pid ee) $$
-      text "ppid:" <+> pretty (ee_ppid ee) $$
-      text "tid:" <+> pretty (ee_tid ee) $$
-      text "ptid:" <+> pretty (ee_ptid ee) $$
-      text "time:" <+> pretty (ee_time ee)
+      text "pid:" <+> pretty (eventPayload_pid ee) $$
+      text "ppid:" <+> pretty (eventPayload_ppid ee) $$
+      text "tid:" <+> pretty (eventPayload_tid ee) $$
+      text "ptid:" <+> pretty (eventPayload_ptid ee) $$
+      text "time:" <+> pretty (eventPayload_time ee)
    pretty le@(LostEvent {}) =
-      text "id:" <+> pretty (le_id le) $$
-      text "lost:" <+> pretty (le_lost le)
+      text "id:" <+> pretty (eventPayload_id le) $$
+      text "lost:" <+> pretty (eventPayload_Lost le)
    pretty se@(SampleEvent {}) =
-      text "ip:" <+> pretty (se_ip se) $$
-      text "pid:" <+> pretty (se_pid se) $$
-      text "tid:" <+> pretty (se_tid se) $$
-      text "time:" <+> pretty (se_time se) $$
-      text "addr:" <+> pretty (se_addr se) $$
-      text "id:" <+> pretty (se_id se) $$
-      text "streamid:" <+> pretty (se_streamid se) $$
-      text "cpu:" <+> pretty (se_cpu se) $$
-      text "period:" <+> pretty (se_period se)
+      text "ip:" <+> pretty (eventPayload_SampleIP se) $$
+      text "pid:" <+> pretty (eventPayload_SamplePID se) $$
+      text "tid:" <+> pretty (eventPayload_SampleTID se) $$
+      text "time:" <+> pretty (eventPayload_SampleTime se) $$
+      text "addr:" <+> pretty (eventPayload_SampleAddr se) $$
+      text "id:" <+> pretty (eventPayload_SampleID se) $$
+      text "streamid:" <+> pretty (eventPayload_SampleStreamID se) $$
+      text "cpu:" <+> pretty (eventPayload_SampleCPU se) $$
+      text "period:" <+> pretty (eventPayload_SamplePeriod se)
    pretty te@(ThrottleEvent {}) =
-      text "time:" <+> pretty (te_time te) $$
-      text "id:" <+> pretty (te_id te) $$
-      text "stream_id:" <+> pretty (te_stream_id te)
+      text "time:" <+> pretty (eventPayload_time te) $$
+      text "id:" <+> pretty (eventPayload_id te) $$
+      text "stream_id:" <+> pretty (eventPayload_stream_id te)
    pretty ue@(UnThrottleEvent {}) =
-      text "time:" <+> pretty (ue_time ue) $$
-      text "id:" <+> pretty (ue_id ue) $$
-      text "stream_id:" <+> pretty (ue_stream_id ue)
+      text "time:" <+> pretty (eventPayload_time ue) $$
+      text "id:" <+> pretty (eventPayload_id ue) $$
+      text "stream_id:" <+> pretty (eventPayload_stream_id ue)
    pretty UnknownEvent = text "Unknown"

@@ -28,7 +28,7 @@ import Profiling.Linux.Perf.Types as Types
    ( FileSection (..), FileHeader (..), EventAttr (..), FileAttr (..), TraceEventType (..)
    , EventHeader (..), EventPayload (..), SampleFormat (..), EventType (..), Event (..)
    , EventAttrFlag (..), TID (..), PID (..), EventTypeID (..), testEventAttrFlag
-   , EventSource (..), EventID (..) )
+   , EventSource (..), EventID (..), TimeStamp (..) )
 import Data.Word (Word64, Word8, Word16, Word32)
 import Data.Binary (Binary (..), getWord8)
 import Control.Monad.Error (ErrorT (..), lift, replicateM, when, throwError )
@@ -88,6 +88,10 @@ getTID = TID `fmap` getU32
 -- read an event ID as a 64 bit word and return EventID type
 getEventID :: GetEvents EventID 
 getEventID = EventID `fmap` getU64
+
+-- read a timeStamp as a 64 bit word and return TimeStamp type
+getTimeStamp :: GetEvents TimeStamp 
+getTimeStamp = TimeStamp `fmap` getU64
 
 runGetEvents :: GetEvents a -> B.ByteString -> Either String a
 runGetEvents = runGet . runErrorT
@@ -318,12 +322,12 @@ parseEventHeader = do
 parseMmapEvent :: GetEvents EventPayload
 parseMmapEvent = do
    -- note we do not parse the event header here, it is done in parseEvent
-   me_pid <- getPID
-   me_tid <- getTID
-   me_start <- getU64
-   me_len <- getU64
-   me_pgoff <- getU64
-   me_filename <- getBSNul
+   eventPayload_pid <- getPID
+   eventPayload_tid <- getTID
+   eventPayload_MmapStart <- getU64
+   eventPayload_MmapLen <- getU64
+   eventPayload_MmapPgoff <- getU64
+   eventPayload_MmapFilename <- getBSNul
    return MmapEvent{..}
 
 -- from <perf source>/util/event.h
@@ -336,9 +340,9 @@ parseMmapEvent = do
 
 parseCommEvent :: Word64 -> GetEvents EventPayload
 parseCommEvent sampleType = do
-   ce_pid <- getPID
-   ce_tid <- getTID
-   ce_comm <- getBSNul
+   eventPayload_pid <- getPID
+   eventPayload_tid <- getTID
+   eventPayload_CommName <- getBSNul
    return CommEvent{..}
 
 -- from <perf source>/util/event.h
@@ -352,22 +356,22 @@ parseCommEvent sampleType = do
 
 parseForkEvent :: GetEvents EventPayload
 parseForkEvent = do
-   fe_pid <- getPID
-   fe_ppid <- getPID
-   fe_tid <- getTID
-   fe_ptid <- getTID
-   fe_time <- getU64
+   eventPayload_pid <- getPID
+   eventPayload_ppid <- getPID
+   eventPayload_tid <- getTID
+   eventPayload_ptid <- getTID
+   eventPayload_time <- getTimeStamp
    return ForkEvent{..}
 
 -- ForkEvent and ExitEvent have the same binary structure.
 
 parseExitEvent :: GetEvents EventPayload
 parseExitEvent = do
-   ee_pid <- getPID
-   ee_ppid <- getPID
-   ee_tid <- getTID
-   ee_ptid <- getTID
-   ee_time <- getU64
+   eventPayload_pid <- getPID
+   eventPayload_ppid <- getPID
+   eventPayload_tid <- getTID
+   eventPayload_ptid <- getTID
+   eventPayload_time <- getTimeStamp 
    return ExitEvent{..}
 
 -- from <perf source>/util/event.h
@@ -380,9 +384,8 @@ parseExitEvent = do
 
 parseLostEvent :: GetEvents EventPayload
 parseLostEvent = do
-   -- le_id <- getU64
-   le_id <- getEventID
-   le_lost <- getU64
+   eventPayload_id <- getEventID
+   eventPayload_Lost <- getU64
    return LostEvent{..}
 
 -- from <system include directory>/linux/perf_event.h
@@ -397,18 +400,16 @@ parseLostEvent = do
 
 parseThrottleEvent :: GetEvents EventPayload
 parseThrottleEvent = do
-   te_time <- getU64
-   -- te_id <- getU64
-   te_id <- getEventID
-   te_stream_id <- getU64
+   eventPayload_time <- getTimeStamp
+   eventPayload_id <- getEventID
+   eventPayload_stream_id <- getU64
    return ThrottleEvent{..}
 
 parseUnThrottleEvent :: GetEvents EventPayload
 parseUnThrottleEvent = do
-   ue_time <- getU64
-   -- ue_id <- getU64
-   ue_id <- getEventID
-   ue_stream_id <- getU64
+   eventPayload_time <- getTimeStamp 
+   eventPayload_id <- getEventID
+   eventPayload_stream_id <- getU64
    return UnThrottleEvent{..}
 
 -- from <perf source>/util/event.h
@@ -424,13 +425,12 @@ parseUnThrottleEvent = do
 
 parseReadEvent :: GetEvents EventPayload
 parseReadEvent = do
-   re_pid <- getPID
-   re_tid <- getTID
-   re_value <- getU64
-   re_time_enabled <- getU64
-   re_time_running <- getU64
-   -- re_id <- getU64
-   re_id <- getEventID
+   eventPayload_pid <- getPID
+   eventPayload_tid <- getTID
+   eventPayload_ReadValue <- getU64
+   eventPayload_ReadTimeEnabled <- getU64
+   eventPayload_ReadTimeRunning <- getU64
+   eventPayload_id <- getEventID
    return ReadEvent{..}
 
 parseSampleType :: Word64 -> SampleFormat -> GetEvents a -> GetEvents (Maybe a)
@@ -440,16 +440,15 @@ parseSampleType sampleType format parser
 
 parseSampleEvent :: Word64 -> GetEvents EventPayload
 parseSampleEvent sampleType = do
-   se_ip <- parseSampleType sampleType PERF_SAMPLE_IP getU64
-   se_pid <- parseSampleType sampleType PERF_SAMPLE_TID getPID
-   se_tid <- parseSampleType sampleType PERF_SAMPLE_TID getTID
-   se_time <- parseSampleType sampleType PERF_SAMPLE_TIME getU64
-   se_addr <- parseSampleType sampleType PERF_SAMPLE_ADDR getU64
-   -- se_id <- parseSampleType sampleType PERF_SAMPLE_ID getU64
-   se_id <- parseSampleType sampleType PERF_SAMPLE_ID getEventID
-   se_streamid <- parseSampleType sampleType PERF_SAMPLE_STREAM_ID getU64
-   se_cpu <- parseSampleType sampleType PERF_SAMPLE_CPU getU32
-   se_period <- parseSampleType sampleType PERF_SAMPLE_PERIOD getU64
+   eventPayload_SampleIP <- parseSampleType sampleType PERF_SAMPLE_IP getU64
+   eventPayload_SamplePID <- parseSampleType sampleType PERF_SAMPLE_TID getPID
+   eventPayload_SampleTID <- parseSampleType sampleType PERF_SAMPLE_TID getTID
+   eventPayload_SampleTime <- parseSampleType sampleType PERF_SAMPLE_TIME getTimeStamp
+   eventPayload_SampleAddr <- parseSampleType sampleType PERF_SAMPLE_ADDR getU64
+   eventPayload_SampleID <- parseSampleType sampleType PERF_SAMPLE_ID getEventID
+   eventPayload_SampleStreamID <- parseSampleType sampleType PERF_SAMPLE_STREAM_ID getU64
+   eventPayload_SampleCPU <- parseSampleType sampleType PERF_SAMPLE_CPU getU32
+   eventPayload_SamplePeriod <- parseSampleType sampleType PERF_SAMPLE_PERIOD getU64
    return SampleEvent{..}
 
 -- XXX sample_id_all is not handled yet.

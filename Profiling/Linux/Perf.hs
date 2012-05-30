@@ -25,7 +25,7 @@ import Profiling.Linux.Perf.Parse
    ( FileHeader (..), FileAttr (..), TraceEventType (..), Event (..),  EventPayload (..), EventHeader (..)
    , EventAttr (..), readHeader, readAttributes, readAttributeIDs, readEventTypes, readEvent
    , EventAttrFlag (..), testEventAttrFlag, PID (..), TID (..), EventTypeID (..), EventSource (..)
-   , EventID (..) )
+   , EventID (..), TimeStamp (..) )
 import Profiling.Linux.Perf.Pretty ( pretty )
 import Text.PrettyPrint as Pretty
    ( render, Doc, empty, text, (<+>), (<>), vcat, ($$), int, hsep )
@@ -57,13 +57,13 @@ sortEventsOnTime =
       compare (getEventTime $ ev_payload e1) (getEventTime $ ev_payload e2) 
    -- Get the timestamp of an event if it has one, otherwise
    -- set it to 0 (for the purposes of sorting them).
-   getEventTime :: EventPayload -> Word64
-   getEventTime e@(SampleEvent {}) = maybe 0 id $ se_time e
-   getEventTime e@(ForkEvent {}) = fe_time e
-   getEventTime e@(ExitEvent {}) = ee_time e
-   getEventTime e@(ThrottleEvent {}) = te_time e
-   getEventTime e@(UnThrottleEvent {}) = ue_time e
-   getEventTime other = 0 
+   getEventTime :: EventPayload -> TimeStamp
+   getEventTime e@(SampleEvent {}) = maybe (TimeStamp 0) id $ eventPayload_SampleTime e
+   getEventTime e@(ForkEvent {}) = eventPayload_time e
+   getEventTime e@(ExitEvent {}) = eventPayload_time e
+   getEventTime e@(ThrottleEvent {}) = eventPayload_time e
+   getEventTime e@(UnThrottleEvent {}) = eventPayload_time e
+   getEventTime other = TimeStamp 0 
 
 makeTypeMap :: PerfData -> TypeMap
 makeTypeMap perfData =
