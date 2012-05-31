@@ -10,6 +10,7 @@
 
 module Profiling.Linux.Perf
    ( module Profiling.Linux.Perf.Parse
+   , module Profiling.Linux.Perf.Types
    , PerfData (..)
    , TypeMap
    , TypeInfo (..)
@@ -22,10 +23,11 @@ module Profiling.Linux.Perf
    ) where
 
 import Profiling.Linux.Perf.Parse
-   ( FileHeader (..), FileAttr (..), TraceEventType (..), Event (..),  EventPayload (..), EventHeader (..)
-   , EventAttr (..), readHeader, readAttributes, readAttributeIDs, readEventTypes, readEvent
-   , EventAttrFlag (..), testEventAttrFlag, PID (..), TID (..), EventTypeID (..), EventSource (..)
-   , EventID (..), TimeStamp (..) )
+   ( readHeader, readAttributes, readAttributeIDs, readEventTypes, readEvent )
+import Profiling.Linux.Perf.Types
+   ( FileHeader (..), FileAttr (..), TraceEventType (..), Event (..), EventPayload (..), EventHeader (..)
+   , EventAttr (..), EventAttrFlag (..), testEventAttrFlag, PID (..), TID (..), EventTypeID (..), EventSource (..)
+   , EventID (..), TimeStamp (..), SampleTypeBitMap (..) )
 import Profiling.Linux.Perf.Pretty ( pretty )
 import Text.PrettyPrint as Pretty
    ( render, Doc, empty, text, (<+>), (<>), vcat, ($$), int, hsep )
@@ -37,16 +39,22 @@ import System.IO (openFile, IOMode(ReadMode), Handle)
 import Data.Maybe (mapMaybe)
 import Data.ByteString.Lazy.Char8 (unpack)
 
--- associate events with their event types
+-- Associate events with their event types.
+-- Events are (usually) tagged with an EventID. Many events can share the same
+-- EventID. Each EventID is associated with exactly one event type, which includes
+-- the name of the event, the source of the event and a type ID.
 type TypeMap = Map EventID TypeInfo
 
 data TypeInfo =
    TypeInfo
-   { typeInfo_name :: String        -- name of event/counter source
-   , typeInfo_source :: EventSource -- kind of event/counter source
-   , typeInfo_id :: EventTypeID     -- magic unique number of this type of event/counter
+   { typeInfo_name :: String        -- name of event source
+   , typeInfo_source :: EventSource -- kind of event source
+   , typeInfo_id :: EventTypeID     -- magic unique number of this type of event
    }
 
+-- Sort a list of events in ascending time order.
+-- Events without a timestamp are treated as having a timestamp of 0,
+-- which places them at the start of the sorted output.
 sortEventsOnTime :: [Event] -> [Event]
 sortEventsOnTime =
    sortBy compareEventTime
@@ -65,10 +73,13 @@ sortEventsOnTime =
    getEventTime e@(UnThrottleEvent {}) = eventPayload_time e
    getEventTime other = TimeStamp 0 
 
+-- Build a map from EventIDs to Event Type info.
 makeTypeMap :: PerfData -> TypeMap
 makeTypeMap perfData =
    List.foldl' idsToInfo Map.empty attrsIDs
    where
+   -- Event IDs from the file header, to be associated with the event attributes
+   -- from the header.
    idss :: [[EventID]]
    idss = perfData_idss perfData
    types :: [TraceEventType]
@@ -87,7 +98,7 @@ makeTypeMap perfData =
       case Map.lookup typeID eventTypeToName of
          -- We don't have a type name for this particular event.
          -- This shouldn't happen in a well formatted perf data file, 
-         -- but we ignore it for the moment.
+         -- but we prefer to ignore it rather than generate an error.
          Nothing -> acc
          -- Update the event type map, mapping each event id to the name.
          Just typeName ->
@@ -96,7 +107,7 @@ makeTypeMap perfData =
       typeSource = ea_type attr 
       typeID = ea_config attr   
 
--- The various parts of the perf.data file collected together
+-- The various parts of the perf.data file collected together.
 data PerfData =
    PerfData
    { perfData_fileHeader :: FileHeader
@@ -106,7 +117,10 @@ data PerfData =
    , perfData_events :: [Event] 
    }
 
--- read the contents of the perf.data file and render it
+-- Style to use for printing the event data.
+data OutputStyle = Dump
+
+-- Read the contents of the perf.data file and render it
 -- on stdout in a specified style.
 readAndDisplay :: OutputStyle -> FilePath -> IO ()
 readAndDisplay style file = display style =<< readPerfData file
@@ -124,35 +138,32 @@ readPerfData file = do
    let attrTypeInfo = getAttrInfo attrs
        (sampleType, sampleIdAll) =
           case attrTypeInfo of
-             []  -> (0, False)
+             []  -> (SampleTypeBitMap 0, False)
              x:_ -> x
        dataOffset = fh_data_offset header
        maxOffset = fh_data_size header + dataOffset
    events <- readEvents h maxOffset dataOffset sampleType
    return $ PerfData header attrs idss types events
 
--- style to use for printing the event data
-data OutputStyle = Dump
-
--- Render the components of the perf.data file under the specified style
+-- Render the components of the perf.data file under the specified style.
 display :: OutputStyle -> PerfData -> IO ()
 display style contents = do
    putStrLn $ render $ case style of
       Dump -> dumper contents
 
--- Get the Sample Type and test the sample_id_all bit in the flags field
-getAttrInfo :: [FileAttr] -> [(Word64, Bool)]
+-- Get the Sample Type and test the sample_id_all bit in the flags field.
+getAttrInfo :: [FileAttr] -> [(SampleTypeBitMap, Bool)]
 getAttrInfo = map getSampleTypeAndIdAll
    where
-   getSampleTypeAndIdAll :: FileAttr -> (Word64, Bool)
+   getSampleTypeAndIdAll :: FileAttr -> (SampleTypeBitMap, Bool)
    getSampleTypeAndIdAll fattr
       = (ea_sample_type attr, testEventAttrFlag (ea_flags attr) SampleIdAll)
       where
       attr = fa_attr $ fattr
 
--- read the events from file and return them in the order that they appear
+-- Read the events from file and return them in the order that they appear
 -- (not sorted on timestamp).
-readEvents :: Handle -> Word64 -> Word64 -> Word64 -> IO [Event]
+readEvents :: Handle -> Word64 -> Word64 -> SampleTypeBitMap -> IO [Event]
 readEvents h maxOffset offset sampleType =
    readWorker offset []
    where

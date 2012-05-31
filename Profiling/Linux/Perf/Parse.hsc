@@ -21,22 +21,21 @@ module Profiling.Linux.Perf.Parse
    , readEventHeader
    , readEvent
    , readEventTypes
-   , module Types
    ) where
 
 import Profiling.Linux.Perf.Types as Types
    ( FileSection (..), FileHeader (..), EventAttr (..), FileAttr (..), TraceEventType (..)
    , EventHeader (..), EventPayload (..), SampleFormat (..), EventType (..), Event (..)
    , EventAttrFlag (..), TID (..), PID (..), EventTypeID (..), testEventAttrFlag
-   , EventSource (..), EventID (..), TimeStamp (..) )
-import Data.Word (Word64, Word8, Word16, Word32)
-import Data.Binary (Binary (..), getWord8)
-import Control.Monad.Error (ErrorT (..), lift, replicateM, when, throwError )
-import System.IO (hSeek, Handle, SeekMode (..))
-import Data.ByteString.Lazy as B (ByteString, hGet)
+   , EventSource (..), EventID (..), TimeStamp (..), SampleTypeBitMap (..) )
+import Data.Word ( Word64, Word8, Word16, Word32 )
+import Data.Binary ( Binary (..), getWord8 )
+import Control.Monad.Error ( ErrorT (..), lift, replicateM, when, throwError )
+import System.IO ( hSeek, Handle, SeekMode (..) )
+import Data.ByteString.Lazy as B ( ByteString, hGet )
 import Data.Binary.Get
-   (Get, runGet, getLazyByteString, getLazyByteStringNul, getWord16le,
-    getWord32le, getWord64le, remaining, getRemainingLazyByteString)
+   ( Get, runGet, getLazyByteString, getLazyByteStringNul, getWord16le,
+     getWord32le, getWord64le, remaining, getRemainingLazyByteString )
 import Data.Bits (testBit)
 import Foreign.Storable (sizeOf)
 import Data.Int (Int64)
@@ -243,14 +242,12 @@ parseEventSource = readPerfType `fmap` getU32
 
 parseEventAttr :: GetEvents EventAttr
 parseEventAttr = do
-   -- ea_type <- getU32
    ea_type <- parseEventSource
    ea_size <- getU32
    ea_config <- EventTypeID `fmap` getU64
    ea_sample_period_or_freq <- getU64
-   ea_sample_type <- getU64
+   ea_sample_type <- SampleTypeBitMap `fmap` getU64
    ea_read_format <- getU64
-   -- ea_flags <- parseEventAttrFlags `fmap` getU64
    ea_flags <- getU64
    ea_wakeup_events_or_watermark <- getU32
    ea_bp_type <- getU32
@@ -338,8 +335,8 @@ parseMmapEvent = do
 --      char comm[16];
 -- };
 
-parseCommEvent :: Word64 -> GetEvents EventPayload
-parseCommEvent sampleType = do
+parseCommEvent :: GetEvents EventPayload
+parseCommEvent = do
    eventPayload_pid <- getPID
    eventPayload_tid <- getTID
    eventPayload_CommName <- getBSNul
@@ -433,12 +430,12 @@ parseReadEvent = do
    eventPayload_id <- getEventID
    return ReadEvent{..}
 
-parseSampleType :: Word64 -> SampleFormat -> GetEvents a -> GetEvents (Maybe a)
+parseSampleType :: SampleTypeBitMap -> SampleFormat -> GetEvents a -> GetEvents (Maybe a)
 parseSampleType sampleType format parser
-   | testBit sampleType (fromEnum format) = Just `fmap` parser
+   | testBit (sampleTypeBitMap sampleType) (fromEnum format) = Just `fmap` parser
    | otherwise = return Nothing
 
-parseSampleEvent :: Word64 -> GetEvents EventPayload
+parseSampleEvent :: SampleTypeBitMap -> GetEvents EventPayload
 parseSampleEvent sampleType = do
    eventPayload_SampleIP <- parseSampleType sampleType PERF_SAMPLE_IP getU64
    eventPayload_SamplePID <- parseSampleType sampleType PERF_SAMPLE_TID getPID
@@ -451,19 +448,19 @@ parseSampleEvent sampleType = do
    eventPayload_SamplePeriod <- parseSampleType sampleType PERF_SAMPLE_PERIOD getU64
    return SampleEvent{..}
 
--- XXX sample_id_all is not handled yet.
+-- sample_id_all
 -- if this flag is set to TRUE then events other than SampleEvent
 -- have additional information. See perf_event__parse_sample
 -- in cern_perf/readperf/origperf.c and also perf_event__parse_id_sample.
 -- We use ea_sample_type from EventAttr to determine what sampling
 -- information we have.
 
-parseEventPayload :: Word64 -> EventType -> GetEvents EventPayload
+parseEventPayload :: SampleTypeBitMap -> EventType -> GetEvents EventPayload
 parseEventPayload sampleType eventType =
    case eventType of
       PERF_RECORD_MMAP -> parseMmapEvent
       PERF_RECORD_LOST -> parseLostEvent
-      PERF_RECORD_COMM -> parseCommEvent sampleType
+      PERF_RECORD_COMM -> parseCommEvent
       PERF_RECORD_EXIT -> parseExitEvent
       PERF_RECORD_THROTTLE -> parseThrottleEvent
       PERF_RECORD_UNTHROTTLE -> parseUnThrottleEvent
@@ -472,7 +469,7 @@ parseEventPayload sampleType eventType =
       PERF_RECORD_SAMPLE -> parseSampleEvent sampleType
       PERF_RECORD_UNKNOWN _ -> return UnknownEvent
 
-parseEvent :: Word64 -> GetEvents Event
+parseEvent :: SampleTypeBitMap -> GetEvents Event
 parseEvent sampleType = do
    ev_header <- parseEventHeader
    let eventType = eh_type ev_header
@@ -487,7 +484,7 @@ readEventHeader h offset = do
    b <- B.hGet h (#size struct perf_event_header)
    runGetEventsCheck parseEventHeader b
 
-readEvent :: Handle -> Word64 -> Word64 -> IO Event
+readEvent :: Handle -> Word64 -> SampleTypeBitMap -> IO Event
 readEvent h offset sampleType = do
    hSeek h AbsoluteSeek $ fromIntegral offset
    let headerSize = #size struct perf_event_header
@@ -517,22 +514,17 @@ readAttributeIDs h attr = do
    let offset = fromIntegral $ fa_ids_offset attr
        size = fromIntegral $ fa_ids_size attr
    hSeek h AbsoluteSeek offset
-   -- b <- B.hGet h (size * bytesInWord64)
    b <- B.hGet h size
    ws <- runGetEventsCheck (replicateM (size `div` bytesInWord64) getU64) b
    return $ map EventID ws
 
 readEventTypes :: Handle -> FileHeader -> IO [TraceEventType]
 readEventTypes h fh = do
-   -- hSeek h AbsoluteSeek (fromIntegral (fh_event_offset fh))
-   -- b <- B.hGet h (fromIntegral (fh_event_size fh))
-   -- runGetEventsCheck (replicateM (fromIntegral nr_types) parseTraceEventType) b
    hSeek h AbsoluteSeek (fromIntegral (fh_event_offset fh))
    loop nr_types []
    where
    loop 0 acc = return $ reverse acc
    loop n acc = do
-      -- hSeek h AbsoluteSeek offset
       b <- B.hGet h sizeOfTypeRecord
       nextRecord <- runGetEventsCheck parseTraceEventType b
       loop (n-1) (nextRecord:acc)

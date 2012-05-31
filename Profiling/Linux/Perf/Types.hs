@@ -33,6 +33,7 @@ module Profiling.Linux.Perf.Types
    , EventSource (..)
    , EventID (..)
    , TimeStamp (..)
+   , SampleTypeBitMap (..)
    ) where
 
 import Data.Word (Word64, Word32, Word16, Word8, Word)
@@ -64,6 +65,9 @@ newtype EventID = EventID { eventID :: Word64 }
 
 newtype TimeStamp = TimeStamp { timeStamp :: Word64 }
    deriving (Eq, Ord, Show, Pretty)
+
+newtype SampleTypeBitMap = SampleTypeBitMap { sampleTypeBitMap :: Word64 }
+   deriving (Eq, Show, Pretty)
 
 -- Event data types
 
@@ -304,7 +308,7 @@ data EventAttr
         -- number of events when a sample is generated if .freq
         -- is not set or frequency for sampling if .freq is set
         ea_sample_period_or_freq :: Word64,
-        ea_sample_type :: Word64,        -- information about what is stored in the sampling record
+        ea_sample_type :: SampleTypeBitMap, -- information about what is stored in the sampling record
         ea_read_format :: Word64,        -- XXX what is this for?
         ea_flags :: Word64,              -- this is a bitfield
         ea_wakeup_events_or_watermark :: Word32, -- wakeup every n events or bytes before wakeup
