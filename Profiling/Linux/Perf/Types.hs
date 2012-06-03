@@ -34,6 +34,9 @@ module Profiling.Linux.Perf.Types
    , EventID (..)
    , TimeStamp (..)
    , SampleTypeBitMap (..)
+   , ByteCount64 (..)
+   , ByteCount32 (..)
+   , ByteCount16 (..)
    ) where
 
 import Data.Word (Word64, Word32, Word16, Word8, Word)
@@ -63,20 +66,27 @@ newtype EventTypeID = EventTypeID { eventTypeID :: Word64 }
 newtype EventID = EventID { eventID :: Word64 }
    deriving (Eq, Ord, Show, Pretty)
 
+-- Measurement of time passed in nanoseconds since a given point.
 newtype TimeStamp = TimeStamp { timeStamp :: Word64 }
    deriving (Eq, Ord, Show, Pretty)
 
+-- A bitmap encoding information about the content of sample events.
 newtype SampleTypeBitMap = SampleTypeBitMap { sampleTypeBitMap :: Word64 }
    deriving (Eq, Show, Pretty)
 
--- Event data types
+-- A 64bit measurement in bytes. For example the size of an object, or an offset from something.
+newtype ByteCount64 = ByteCount64 { byteCount64 :: Word64 }
+   deriving (Eq, Ord, Show, Pretty, Enum, Integral, Real, Num)
 
-{-
-data Event = Event { ev_type    :: EventType,
-                     ev_cpumode :: EventCPUMode,
-                     ev_size    :: Word16,
-                     ev_data    :: [Word8] }
--}
+-- A 32bit measurement in bytes. For example the size of an object, or an offset from something.
+newtype ByteCount32 = ByteCount32 { byteCount32 :: Word32 }
+   deriving (Eq, Ord, Show, Pretty, Enum, Integral, Real, Num)
+
+-- A 16bit measurement in bytes. For example the size of an object, or an offset from something.
+newtype ByteCount16 = ByteCount16 { byteCount16 :: Word16 }
+   deriving (Eq, Ord, Show, Pretty, Enum, Integral, Real, Num)
+
+-- Event data types
 
 data Event =
    Event
@@ -160,8 +170,8 @@ instance Pretty EventCPUMode where
 -- Corresponds with the perf_file_section struct in <perf source>/util/header.h
 data FileSection
   = FileSection {
-       sec_offset :: Word64,   -- File offset to the section.
-       sec_size   :: Word64    -- Size of the section in bytes.
+       sec_offset :: ByteCount64, -- File offset to the section.
+       sec_size   :: ByteCount64  -- Size of the section in bytes.
     }
 
 instance Pretty FileSection where
@@ -171,15 +181,15 @@ instance Pretty FileSection where
 -- Corresponds with the perf_file_header struct in <perf source>/util/header.h
 data FileHeader
    = FileHeader {
-        fh_size          :: Word64,    -- Size of (this) header.
-        fh_attr_size     :: Word64,    -- Size of one attribute section.
-        fh_attrs_offset  :: Word64,    -- File offset to the attribute section.
-        fh_attrs_size    :: Word64,    -- Size of the attribute section in bytes.
-        fh_data_offset   :: Word64,    -- File offset to the data section.
-        fh_data_size     :: Word64,    -- Size of the data section in bytes.
-        fh_event_offset  :: Word64,    -- File offset to the event section.
-        fh_event_size    :: Word64,    -- Size of the event section in bytes.
-        fh_adds_features :: [Word32]   -- Bitfield. XXX what is this for?
+        fh_size          :: ByteCount64,    -- Size of (this) header.
+        fh_attr_size     :: ByteCount64,    -- Size of one attribute section.
+        fh_attrs_offset  :: ByteCount64,    -- File offset to the attribute section.
+        fh_attrs_size    :: ByteCount64,    -- Size of the attribute section in bytes.
+        fh_data_offset   :: ByteCount64,    -- File offset to the data section.
+        fh_data_size     :: ByteCount64,    -- Size of the data section in bytes.
+        fh_event_offset  :: ByteCount64,    -- File offset to the event section.
+        fh_event_size    :: ByteCount64,    -- Size of the event section in bytes.
+        fh_adds_features :: [Word32]      -- Bitfield. XXX what is this for?
      }
 
 instance Pretty FileHeader where
@@ -301,8 +311,8 @@ instance Pretty EventSource where
 data EventAttr
    = EventAttr {
         ea_type :: EventSource,   -- Major type: hardware/software/tracepoint/etc.
-                             -- defined as enum perf_type_id in include/linux/perf_event.h
-        ea_size :: Word32,   -- Size of the attr structure, for fwd/bwd compat.
+                                  -- defined as enum perf_type_id in include/linux/perf_event.h
+        ea_size :: ByteCount32,     -- Size of the attr structure, for fwd/bwd compat.
         ea_config :: EventTypeID, -- Link to .event id of perf trace event type.
 
         -- number of events when a sample is generated if .freq
@@ -333,8 +343,8 @@ instance Pretty EventAttr where
 
 data FileAttr = FileAttr {
    fa_attr :: EventAttr,
-   fa_ids_offset :: Word64, -- File offset to the ids section.
-   fa_ids_size   :: Word64  -- Size of the ids section in bytes.
+   fa_ids_offset :: ByteCount64,     -- File offset to the ids section.
+   fa_ids_size   :: ByteCount64 -- Size of the ids section in bytes.
 }
 
 instance Pretty FileAttr where
@@ -358,7 +368,7 @@ instance Pretty TraceEventType where
 data EventHeader = EventHeader {
    eh_type :: EventType,
    eh_misc :: Word16,
-   eh_size :: Word16
+   eh_size :: ByteCount16
 }
 
 instance Pretty EventHeader where

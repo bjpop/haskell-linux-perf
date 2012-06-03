@@ -27,7 +27,8 @@ import Profiling.Linux.Perf.Types as Types
    ( FileSection (..), FileHeader (..), EventAttr (..), FileAttr (..), TraceEventType (..)
    , EventHeader (..), EventPayload (..), SampleFormat (..), EventType (..), Event (..)
    , EventAttrFlag (..), TID (..), PID (..), EventTypeID (..), testEventAttrFlag
-   , EventSource (..), EventID (..), TimeStamp (..), SampleTypeBitMap (..) )
+   , EventSource (..), EventID (..), TimeStamp (..), SampleTypeBitMap (..)
+   , ByteCount64 (..), ByteCount32 (..), ByteCount16 (..) )
 import Data.Word ( Word64, Word8, Word16, Word32 )
 import Data.Binary ( Binary (..), getWord8 )
 import Control.Monad.Error ( ErrorT (..), lift, replicateM, when, throwError )
@@ -92,6 +93,18 @@ getEventID = EventID `fmap` getU64
 getTimeStamp :: GetEvents TimeStamp 
 getTimeStamp = TimeStamp `fmap` getU64
 
+-- read a byte count as a 64 bit word and return a ByteCount64 type
+getByteCount64 :: GetEvents ByteCount64
+getByteCount64 = ByteCount64 `fmap` getU64
+
+-- read a byte count as a 32 bit word and return a ByteCount32 type
+getByteCount32 :: GetEvents ByteCount32
+getByteCount32 = ByteCount32 `fmap` getU32
+
+-- read a byte count as a 16 bit word and return a ByteCount16 type
+getByteCount16 :: GetEvents ByteCount16
+getByteCount16 = ByteCount16 `fmap` getU16
+
 runGetEvents :: GetEvents a -> B.ByteString -> Either String a
 runGetEvents = runGet . runErrorT
 
@@ -117,8 +130,8 @@ hEADER_FEAT_BITS = (#const HEADER_FEAT_BITS) :: Int
 
 parseFileSection :: GetEvents FileSection
 parseFileSection = do
-    sec_offset <- getU64
-    sec_size   <- getU64
+    sec_offset <- getByteCount64
+    sec_size   <- getByteCount64
     return FileSection{..}
 
 -- from <perf source>/util/header.h
@@ -138,8 +151,8 @@ parseFileHeader = do
     magic       <- getU64
     when (magic /= pERF_MAGIC) $
         throwError "incompatible file format, or not a perf file"
-    fh_size        <- getU64
-    fh_attr_size   <- getU64
+    fh_size        <- getByteCount64
+    fh_attr_size   <- getByteCount64
     FileSection fh_attrs_offset fh_attrs_size  <- parseFileSection
     FileSection fh_data_offset  fh_data_size   <- parseFileSection
     FileSection fh_event_offset fh_event_size  <- parseFileSection
@@ -243,7 +256,7 @@ parseEventSource = readPerfType `fmap` getU32
 parseEventAttr :: GetEvents EventAttr
 parseEventAttr = do
    ea_type <- parseEventSource
-   ea_size <- getU32
+   ea_size <- getByteCount32
    ea_config <- EventTypeID `fmap` getU64
    ea_sample_period_or_freq <- getU64
    ea_sample_type <- SampleTypeBitMap `fmap` getU64
@@ -302,7 +315,7 @@ parseEventHeader :: GetEvents EventHeader
 parseEventHeader = do
    eh_type <- (toEnum . fromIntegral) `fmap` getU32
    eh_misc <- getU16
-   eh_size <- getU16
+   eh_size <- getByteCount16
    return EventHeader{..}
 
 -- from <perf source>/util/event.h
@@ -484,7 +497,7 @@ readEventHeader h offset = do
    b <- B.hGet h (#size struct perf_event_header)
    runGetEventsCheck parseEventHeader b
 
-readEvent :: Handle -> Word64 -> SampleTypeBitMap -> IO Event
+readEvent :: Handle -> ByteCount64 -> SampleTypeBitMap -> IO Event
 readEvent h offset sampleType = do
    hSeek h AbsoluteSeek $ fromIntegral offset
    let headerSize = #size struct perf_event_header

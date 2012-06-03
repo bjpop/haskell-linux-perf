@@ -27,11 +27,10 @@ import Profiling.Linux.Perf.Parse
 import Profiling.Linux.Perf.Types
    ( FileHeader (..), FileAttr (..), TraceEventType (..), Event (..), EventPayload (..), EventHeader (..)
    , EventAttr (..), EventAttrFlag (..), testEventAttrFlag, PID (..), TID (..), EventTypeID (..), EventSource (..)
-   , EventID (..), TimeStamp (..), SampleTypeBitMap (..) )
+   , EventID (..), TimeStamp (..), SampleTypeBitMap (..), ByteCount64 (..) )
 import Profiling.Linux.Perf.Pretty ( pretty )
 import Text.PrettyPrint as Pretty
    ( render, Doc, empty, text, (<+>), (<>), vcat, ($$), int, hsep )
-import Data.Word (Word64, Word32)
 import Data.List as List (intersperse, sortBy, foldl')
 import Data.Map as Map hiding (mapMaybe, map, filter, null, foldr)
 import Data.Bits (testBit)
@@ -163,11 +162,11 @@ getAttrInfo = map getSampleTypeAndIdAll
 
 -- Read the events from file and return them in the order that they appear
 -- (not sorted on timestamp).
-readEvents :: Handle -> Word64 -> Word64 -> SampleTypeBitMap -> IO [Event]
+readEvents :: Handle -> ByteCount64 -> ByteCount64 -> SampleTypeBitMap -> IO [Event]
 readEvents h maxOffset offset sampleType =
    readWorker offset []
    where
-   readWorker :: Word64 -> [Event] -> IO [Event]
+   readWorker :: ByteCount64 -> [Event] -> IO [Event]
    readWorker offset acc
       | offset >= maxOffset = return $ reverse acc
       | otherwise = do
