@@ -1,20 +1,26 @@
------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- |
--- Copyright   : (c) 2010,2011,2012 Simon Marlow, Bernie Pope, Mikolaj Konarski
+-- Copyright   : (c) 2010,2011,2012 Simon Marlow, Bernie Pope,
+--               Mikolaj Konarski
 -- License     : BSD-style
 -- Maintainer  : florbitous@gmail.com
 -- Stability   : experimental
 -- Portability : ghc
 --
------------------------------------------------------------------------------
+-- A library for reading the perf.data file output of the linux perf command.
+-- The perf command provides performance profiling information for
+-- applications running under the linux operating system. This information
+-- includes hardware performance counters and kernel tracepoints.
+--
+--------------------------------------------------------------------------------
 
 module Profiling.Linux.Perf
-   ( module Profiling.Linux.Perf.Parse
-   , module Profiling.Linux.Perf.Types
-   , PerfData (..)
+   ( -- * Data types
+     PerfData (..)
    , TypeMap
    , TypeInfo (..)
    , OutputStyle (..)
+     -- * Functions
    , readAndDisplay
    , readPerfData
    , display
@@ -25,15 +31,15 @@ module Profiling.Linux.Perf
 import Profiling.Linux.Perf.Parse
    ( readHeader, readAttributes, readAttributeIDs, readEventTypes, readEvent )
 import Profiling.Linux.Perf.Types
-   ( FileHeader (..), FileAttr (..), TraceEventType (..), Event (..), EventPayload (..), EventHeader (..)
-   , EventAttr (..), EventAttrFlag (..), testEventAttrFlag, PID (..), TID (..), EventTypeID (..), EventSource (..)
+   ( FileHeader (..), FileAttr (..), TraceEventType (..), Event (..), 
+     EventPayload (..), EventHeader (..) , EventAttr (..), EventAttrFlag (..),
+     testEventAttrFlag, PID (..), TID (..), EventTypeID (..), EventSource (..)
    , EventID (..), TimeStamp (..), SampleTypeBitMap (..), ByteCount64 (..) )
 import Profiling.Linux.Perf.Pretty ( pretty )
 import Text.PrettyPrint as Pretty
    ( render, Doc, empty, text, (<+>), (<>), vcat, ($$), int, hsep )
 import Data.List as List (intersperse, sortBy, foldl')
 import Data.Map as Map hiding (mapMaybe, map, filter, null, foldr)
-import Data.Bits (testBit)
 import System.IO (openFile, IOMode(ReadMode), Handle)
 import Data.Maybe (mapMaybe)
 import Data.ByteString.Lazy.Char8 (unpack)
