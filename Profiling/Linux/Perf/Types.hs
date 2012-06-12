@@ -7,36 +7,58 @@
 -- Stability   : experimental
 -- Portability : ghc
 --
--- Types for representing the parsed contents of a "perf.data" file
--- "perf.data" is the the output of the "perf record" command on
--- linux (linux performance counter information).
+-- Types for representing the parsed contents of a @perf.data@ file output
+-- the @perf record@ command on Linux (Linux performance counter information).
+-- 
+-- There is an intentional close correspondence between the types in this
+-- module and the representation in the C implementation of perf. 
 --
 -----------------------------------------------------------------------------
 
 module Profiling.Linux.Perf.Types
-   ( Event (..)
-   , EventType (..)
-   , EventCPUMode (..)
-   , FileSection (..)
-   , FileHeader (..)
-   , EventAttr (..)
-   , FileAttr (..)
-   , EventHeader (..)
-   , EventPayload (..)
-   , SampleFormat (..)
-   , TraceEventType (..)
-   , EventAttrFlag (..)
-   , testEventAttrFlag
-   , PID (..)
+   ( -- * Identifiers
+     PID (..)
    , TID (..)
-   , EventTypeID (..)
-   , EventSource (..)
    , EventID (..)
-   , TimeStamp (..)
-   , SampleTypeBitMap (..)
+   , EventTypeID (..)
+
+   -- * Byte counters
+
    , ByteCount64 (..)
    , ByteCount32 (..)
    , ByteCount16 (..)
+
+   -- * Timestamps
+
+   , TimeStamp (..)
+
+   -- * File structure
+
+   , FileSection (..)
+   , FileHeader (..)
+   , FileAttr (..)
+
+   -- * Event data
+
+   , Event (..)
+   , EventCPUMode (..)
+   , EventAttr (..)
+   , EventHeader (..)
+   , EventPayload (..)
+
+   -- * Event type information
+
+   , EventType (..)
+   , SampleFormat (..)
+   , TraceEventType (..)
+   , EventAttrFlag (..)
+   , EventSource (..)
+   , SampleTypeBitMap (..)
+   , testEventAttrFlag
+
+   -- * An abstract representation of the perf data file
+
+   , PerfData (..)
    ) where
 
 import Data.Word (Word64, Word32, Word16, Word8, Word)
@@ -47,51 +69,60 @@ import Data.Bits (testBit)
 
 -- -----------------------------------------------------------------------------
 
--- process ID
+-- | The various parts of the perf.data file collected together.
+data PerfData =
+   PerfData
+   { perfData_fileHeader :: FileHeader -- ^ File header explains the structure of the file.
+   , perfData_attrs :: [FileAttr] -- ^ Common attributes of events.
+   , perfData_idss :: [[EventID]] -- ^ Event identifiers to be associated with the event attributes.
+   , perfData_types :: [TraceEventType] -- ^ Event type information.
+   , perfData_events :: [Event] -- ^ The event payload.
+   }
+
+-- | Process ID.
 newtype PID = PID { pid :: Word32 }
    deriving (Eq, Ord, Show, Pretty)
 
--- thread ID
+-- | Thread ID.
 newtype TID = TID { tid :: Word32 }
    deriving (Eq, Ord, Show, Pretty)
 
--- event type ID (magic unique number of an event type)
+-- | Event type ID (magic unique number of an event type).
 newtype EventTypeID = EventTypeID { eventTypeID :: Word64 }
    deriving (Eq, Ord, Show, Pretty)
 
--- event ID
+-- | Event ID.
 -- Not really an identity. This number is used to link
 -- an event to an event type. Multiple events can have the same EventID,
 -- which means they all have the same event type.
 newtype EventID = EventID { eventID :: Word64 }
    deriving (Eq, Ord, Show, Pretty)
 
--- Measurement of time passed in nanoseconds since a given point.
+-- | Measurement of time passed in nanoseconds since a given point.
 newtype TimeStamp = TimeStamp { timeStamp :: Word64 }
    deriving (Eq, Ord, Show, Pretty)
 
--- A bitmap encoding information about the content of sample events.
+-- | A bitmap encoding information about the content of sample events.
 newtype SampleTypeBitMap = SampleTypeBitMap { sampleTypeBitMap :: Word64 }
    deriving (Eq, Show, Pretty)
 
--- A 64bit measurement in bytes. For example the size of an object, or an offset from something.
+-- | A 64 bit measurement in bytes. For example the size of an object, or an offset.
 newtype ByteCount64 = ByteCount64 { byteCount64 :: Word64 }
    deriving (Eq, Ord, Show, Pretty, Enum, Integral, Real, Num)
 
--- A 32bit measurement in bytes. For example the size of an object, or an offset from something.
+-- | A 32 bit measurement in bytes. For example the size of an object, or an offset.
 newtype ByteCount32 = ByteCount32 { byteCount32 :: Word32 }
    deriving (Eq, Ord, Show, Pretty, Enum, Integral, Real, Num)
 
--- A 16bit measurement in bytes. For example the size of an object, or an offset from something.
+-- | A 16 bit measurement in bytes. For example the size of an object, or an offset.
 newtype ByteCount16 = ByteCount16 { byteCount16 :: Word16 }
    deriving (Eq, Ord, Show, Pretty, Enum, Integral, Real, Num)
 
--- Event data types
-
+-- | A Single event record.
 data Event =
    Event
-   { ev_header :: EventHeader
-   , ev_payload :: EventPayload
+   { ev_header :: EventHeader -- ^ Information about the structure of the event.
+   , ev_payload :: EventPayload -- ^ The event data.
    }
 
 instance Pretty Event where
@@ -100,7 +131,8 @@ instance Pretty Event where
       text "payload: " <+> (pretty $ ev_payload ev)
 
 -- XXX should probably get this from the definintion of the C type
-data EventType -- perf_event_header->type
+-- | Encoding of the @perf_event_header->type@.
+data EventType 
    = PERF_RECORD_MMAP       -- 1
    | PERF_RECORD_LOST       -- 2
    | PERF_RECORD_COMM       -- 3
@@ -140,56 +172,58 @@ instance Enum EventType where
 instance Pretty EventType where
    pretty = text . show
 
+-- | Information about what is stored in a sample event.
 data SampleFormat
-   = PERF_SAMPLE_IP        -- 1U << 0
-   | PERF_SAMPLE_TID       -- 1U << 1
-   | PERF_SAMPLE_TIME      -- 1U << 2
-   | PERF_SAMPLE_ADDR      -- 1U << 3
-   | PERF_SAMPLE_READ      -- 1U << 4
-   | PERF_SAMPLE_CALLCHAIN -- 1U << 5
-   | PERF_SAMPLE_ID        -- 1U << 6
-   | PERF_SAMPLE_CPU       -- 1U << 7
-   | PERF_SAMPLE_PERIOD    -- 1U << 8
-   | PERF_SAMPLE_STREAM_ID -- 1U << 9
-   | PERF_SAMPLE_RAW       -- 1U << 10
+   = PERF_SAMPLE_IP        -- ^ 1U << 0
+   | PERF_SAMPLE_TID       -- ^ 1U << 1
+   | PERF_SAMPLE_TIME      -- ^ 1U << 2
+   | PERF_SAMPLE_ADDR      -- ^ 1U << 3
+   | PERF_SAMPLE_READ      -- ^ 1U << 4
+   | PERF_SAMPLE_CALLCHAIN -- ^ 1U << 5
+   | PERF_SAMPLE_ID        -- ^ 1U << 6
+   | PERF_SAMPLE_CPU       -- ^ 1U << 7
+   | PERF_SAMPLE_PERIOD    -- ^ 1U << 8
+   | PERF_SAMPLE_STREAM_ID -- ^ 1U << 9
+   | PERF_SAMPLE_RAW       -- ^ 1U << 10
    deriving (Eq, Enum, Show)
 
 instance Pretty SampleFormat where
    pretty = text . show
 
-data EventCPUMode -- a bitfield in perf_event_header->misc
-   = PERF_RECORD_CPUMODE_UNKNOWN -- 0
-   | PERF_RECORD_MISC_KERNEL     -- 1
-   | PERF_RECORD_MISC_USER       -- 2
-   | PERF_RECORD_MISC_HYPERVISOR -- 3
+-- | A bitfield in @perf_event_header->misc@.
+data EventCPUMode 
+   = PERF_RECORD_CPUMODE_UNKNOWN -- ^ 0
+   | PERF_RECORD_MISC_KERNEL     -- ^ 1
+   | PERF_RECORD_MISC_USER       -- ^ 2
+   | PERF_RECORD_MISC_HYPERVISOR -- ^ 3
    deriving (Eq, Show)
 
 instance Pretty EventCPUMode where
    pretty = text . show
 
--- Corresponds with the perf_file_section struct in <perf source>/util/header.h
+-- | Corresponds with the @perf_file_section@ struct in @\<perf source\>\/util\/header.h@
 data FileSection
   = FileSection {
-       sec_offset :: ByteCount64, -- File offset to the section.
-       sec_size   :: ByteCount64  -- Size of the section in bytes.
+       sec_offset :: ByteCount64, -- ^ File offset to the section.
+       sec_size   :: ByteCount64  -- ^ Size of the section in bytes.
     }
 
 instance Pretty FileSection where
    pretty fs = text "offset:" <+> pretty (sec_offset fs) $$
                text "size:" <+> pretty (sec_size fs)
 
--- Corresponds with the perf_file_header struct in <perf source>/util/header.h
+-- | Corresponds with the @perf_file_header@ struct in @\<perf source\>\/util\/header.h@
 data FileHeader
    = FileHeader {
-        fh_size          :: ByteCount64,    -- Size of (this) header.
-        fh_attr_size     :: ByteCount64,    -- Size of one attribute section.
-        fh_attrs_offset  :: ByteCount64,    -- File offset to the attribute section.
-        fh_attrs_size    :: ByteCount64,    -- Size of the attribute section in bytes.
-        fh_data_offset   :: ByteCount64,    -- File offset to the data section.
-        fh_data_size     :: ByteCount64,    -- Size of the data section in bytes.
-        fh_event_offset  :: ByteCount64,    -- File offset to the event section.
-        fh_event_size    :: ByteCount64,    -- Size of the event section in bytes.
-        fh_adds_features :: [Word32]      -- Bitfield. XXX what is this for?
+        fh_size          :: ByteCount64,    -- ^ Size of (this) header.
+        fh_attr_size     :: ByteCount64,    -- ^ Size of one attribute section.
+        fh_attrs_offset  :: ByteCount64,    -- ^ File offset to the attribute section.
+        fh_attrs_size    :: ByteCount64,    -- ^ Size of the attribute section in bytes.
+        fh_data_offset   :: ByteCount64,    -- ^ File offset to the data section.
+        fh_data_size     :: ByteCount64,    -- ^ Size of the data section in bytes.
+        fh_event_offset  :: ByteCount64,    -- ^ File offset to the event section.
+        fh_event_size    :: ByteCount64,    -- ^ Size of the event section in bytes.
+        fh_adds_features :: [Word32]        -- ^ Bitfield.
      }
 
 instance Pretty FileHeader where
@@ -204,33 +238,32 @@ instance Pretty FileHeader where
       text "event size:" <+> pretty (fh_event_size fh) $$
       text "features:" <+> hsep (Prelude.map pretty $ fh_adds_features fh)
 
--- See struct perf_event_attr in linux/perf_event.h
+-- | See struct @perf_event_attr@ in @linux\/perf_event.h@
 data EventAttrFlag
-   = Disabled              -- off by default
-   | Inherit               -- children inherit it
-   | Pinned                -- must always be on PMU
-   | Exclusive             -- only group on PMU
-   | ExcludeUser           -- don't count user
-   | ExcludeKernel         -- ditto kernel
-   | ExcludeHV             -- ditto hypervisor
-   | ExcludeIdle           -- don't count when idle
-   | Mmap                  -- include mmap data
-   | Comm                  -- include comm data
-   | Freq                  -- use freq, not period
-   | InheritStat           -- per task counts
-   | EnableOnExec          -- next exec enables
-   | Task                  -- trace fork/exit
-   | WaterMark             -- wakeup_watermark
+   = Disabled              -- ^ off by default
+   | Inherit               -- ^ children inherit it
+   | Pinned                -- ^ must always be on PMU
+   | Exclusive             -- ^ only group on PMU
+   | ExcludeUser           -- ^ don't count user
+   | ExcludeKernel         -- ^ ditto kernel
+   | ExcludeHV             -- ^ ditto hypervisor
+   | ExcludeIdle           -- ^ don't count when idle
+   | Mmap                  -- ^ include mmap data
+   | Comm                  -- ^ include comm data
+   | Freq                  -- ^ use freq, not period
+   | InheritStat           -- ^ per task counts
+   | EnableOnExec          -- ^ next exec enables
+   | Task                  -- ^ trace fork/exit
+   | WaterMark             -- ^ wakeup_watermark
 
-   -- precise_ip
-   -- See also PERF_RECORD_MISC_EXACT_IP
-   | ArbitrarySkid
-   | ConstantSkid
-   | RequestedZeroSkid
-   | CompulsoryZeroSkid
+   
+   | ArbitrarySkid         -- ^ precise_ip, See also @PERF_RECORD_MISC_EXACT_IP@
+   | ConstantSkid          -- ^ precise_ip, See also @PERF_RECORD_MISC_EXACT_IP@
+   | RequestedZeroSkid     -- ^ precise_ip, See also @PERF_RECORD_MISC_EXACT_IP@
+   | CompulsoryZeroSkid    -- ^ precise_ip, See also @PERF_RECORD_MISC_EXACT_IP@
 
-   | MmapData              -- non-exec mmap data
-   | SampleIdAll           -- sample_type all events
+   | MmapData              -- ^ non-exec mmap data
+   | SampleIdAll           -- ^ sample_type all events
    deriving (Eq, Ord, Enum, Show)
 
 instance Pretty EventAttrFlag where
@@ -256,7 +289,8 @@ instance Pretty EventAttrFlag where
    pretty MmapData = text "mmap-data"
    pretty SampleIdAll = text "sample-id-all"
 
--- Test if a given EventAttrFlag is set.
+-- | Test if a given EventAttrFlag is set.
+
 -- Tedious definition because of the way the skid flags are
 -- implemented as a 2 bit word instead of individual single bits.
 testEventAttrFlag :: Word64 -> EventAttrFlag -> Bool
@@ -284,6 +318,7 @@ testEventAttrFlag word flag =
       MmapData           -> testBit word 17
       SampleIdAll        -> testBit word 18
 
+-- | Pretty print an event attribute bit field as a list of set flags.
 prettyFlags :: Word64 -> Doc
 prettyFlags word = foldr testFlag empty [toEnum 0 ..]
    where
@@ -292,39 +327,40 @@ prettyFlags word = foldr testFlag empty [toEnum 0 ..]
       | testEventAttrFlag word flag = pretty flag <+> rest
       | otherwise = rest
 
--- Corresponds with the enum perf_type_id in include/linux/perf_event.h
+-- | Corresponds with the enum @perf_type_id@ in @include\/linux\/perf_event.h@
+
 -- XXX should really derive this directly from the header file
 data EventSource
-   = PerfTypeHardware     -- 0
-   | PerfTypeSoftware     -- 1
-   | PerfTypeTracePoint   -- 2
-   | PerfTypeHwCache      -- 3
-   | PerfTypeRaw          -- 4
-   | PerfTypeBreakpoint   -- 5
+   = PerfTypeHardware     -- ^ 0
+   | PerfTypeSoftware     -- ^ 1
+   | PerfTypeTracePoint   -- ^ 2
+   | PerfTypeHwCache      -- ^ 3
+   | PerfTypeRaw          -- ^ 4
+   | PerfTypeBreakpoint   -- ^ 5
    | PerfTypeUnknown
    deriving (Eq, Ord, Show, Enum)
 
 instance Pretty EventSource where
    pretty = text . show
 
--- Corresponds with the perf_event_attr struct in include/linux/perf_event.h
+-- | Corresponds with the @perf_event_attr@ struct in @include\/linux\/perf_event.h@
 data EventAttr
    = EventAttr {
-        ea_type :: EventSource,   -- Major type: hardware/software/tracepoint/etc.
+        ea_type :: EventSource,   -- ^ Major type: hardware/software/tracepoint/etc.
                                   -- defined as enum perf_type_id in include/linux/perf_event.h
-        ea_size :: ByteCount32,     -- Size of the attr structure, for fwd/bwd compat.
-        ea_config :: EventTypeID, -- Link to .event id of perf trace event type.
+        ea_size :: ByteCount32,   -- ^ Size of the attr structure, for fwd/bwd compat.
+        ea_config :: EventTypeID, -- ^ Link to .event id of perf trace event type.
 
-        -- number of events when a sample is generated if .freq
-        -- is not set or frequency for sampling if .freq is set
-        ea_sample_period_or_freq :: Word64,
-        ea_sample_type :: SampleTypeBitMap, -- information about what is stored in the sampling record
-        ea_read_format :: Word64,        -- XXX what is this for?
-        ea_flags :: Word64,              -- this is a bitfield
-        ea_wakeup_events_or_watermark :: Word32, -- wakeup every n events or bytes before wakeup
-        ea_bp_type :: Word32,            -- XXX what is this for?
-        ea_bp_addr_or_config1 :: Word64, -- XXX what is this for?
-        ea_bp_len_or_config2 :: Word64   -- XXX what is this for?
+        
+        ea_sample_period_or_freq :: Word64, -- ^ Number of events when a sample is generated if .freq
+                                            -- is not set or frequency for sampling if .freq is set.
+        ea_sample_type :: SampleTypeBitMap, -- ^ Information about what is stored in the sampling record.
+        ea_read_format :: Word64,           -- 
+        ea_flags :: Word64,                 -- 
+        ea_wakeup_events_or_watermark :: Word32, -- ^ Wakeup every n events or bytes before wakeup.
+        ea_bp_type :: Word32,               -- 
+        ea_bp_addr_or_config1 :: Word64,    -- 
+        ea_bp_len_or_config2 :: Word64      -- 
      }
 
 instance Pretty EventAttr where
@@ -341,10 +377,12 @@ instance Pretty EventAttr where
       text "bp address or config1:" <+> pretty (ea_bp_addr_or_config1 ea) $$
       text "bp length or config2:" <+> pretty (ea_bp_len_or_config2 ea)
 
+
+-- | Layout of event attribute and attribute ids.
 data FileAttr = FileAttr {
-   fa_attr :: EventAttr,
-   fa_ids_offset :: ByteCount64,     -- File offset to the ids section.
-   fa_ids_size   :: ByteCount64 -- Size of the ids section in bytes.
+   fa_attr :: EventAttr,         -- ^ The attribute payload.
+   fa_ids_offset :: ByteCount64, -- ^ File offset to the ids section.
+   fa_ids_size   :: ByteCount64  -- ^ Size of the ids section in bytes.
 }
 
 instance Pretty FileAttr where
@@ -353,9 +391,10 @@ instance Pretty FileAttr where
       text "ids offset:" <+> pretty (fa_ids_offset fa) $$
       text "ids size:" <+> pretty (fa_ids_size fa)
 
+-- | Identity and printable name of an event type.
 data TraceEventType = TraceEventType {
-   te_event_id :: EventTypeID, -- This entry belongs to the perf event attr entry where .config
-                          -- has the same value as this id.
+   te_event_id :: EventTypeID, -- ^ This entry belongs to the perf event attr entry where .config
+                               -- has the same value as this id.
    te_name :: ByteString
 }
 
@@ -364,7 +403,7 @@ instance Pretty TraceEventType where
       text "event id:" <+> pretty (te_event_id te) $$
       text "name:" <+> pretty (te_name te)
 
--- Corresponds with the perf_event_header struct in <perf source>/util/perf_event.h
+-- | Corresponds with the @perf_event_header@ struct in @\<perf source\>\/util\/perf_event.h@
 data EventHeader = EventHeader {
    eh_type :: EventType,
    eh_misc :: Word16,
@@ -378,43 +417,43 @@ instance Pretty EventHeader where
       text "size:" <+> pretty (eh_size eh)
 
 data EventPayload =
-   -- Corresponds with the comm_event struct in <perf source>/util/event.h (without the header)
+   -- Corresponds with the @comm_event@ struct in @\<perf source\>\/util\/event.h@ (without the header).
    CommEvent {
-      eventPayload_pid :: PID,            -- process id
-      eventPayload_tid :: TID,            -- thread id
-      eventPayload_CommName :: ByteString -- name of the application
+      eventPayload_pid :: PID,            -- ^ process id
+      eventPayload_tid :: TID,            -- ^ thread id
+      eventPayload_CommName :: ByteString -- ^ name of the application
    }
-   -- Corresponds with the mmap_event struct in <perf source>/util/event.h (without the header)
+   -- Corresponds with the @mmap_event@ struct in @\<perf source\>\/util\/event.h@ (without the header).
    | MmapEvent {
-      eventPayload_pid :: PID,                -- process id
-      eventPayload_tid :: TID,                -- thread id
-      eventPayload_MmapStart :: Word64,       -- start of memory range
-      eventPayload_MmapLen :: Word64,         -- size of memory range
-      eventPayload_MmapPgoff :: Word64,       -- page offset? XXX what is this for?
-      eventPayload_MmapFilename :: ByteString -- binary file using this range
+      eventPayload_pid :: PID,                
+      eventPayload_tid :: TID,                
+      eventPayload_MmapStart :: Word64,       -- ^ start of memory range
+      eventPayload_MmapLen :: Word64,         -- ^ size of memory range
+      eventPayload_MmapPgoff :: Word64,       -- ^ page offset
+      eventPayload_MmapFilename :: ByteString -- ^ binary file using this range
    }
-   -- Corresponds with the fork_event struct in <perf source>/util/event.h (without the header)
+   -- ForkEvent corresponds with the @fork_event@ struct in @\<perf source\>\/util\/event.h@ (without the header)
    | ForkEvent {
-      eventPayload_pid :: PID,       -- process id
-      eventPayload_ppid :: PID,      -- parent proecess id
-      eventPayload_tid :: TID,       -- thread id
-      eventPayload_ptid :: TID,      -- parent thread id
-      eventPayload_time :: TimeStamp -- timestamp
+      eventPayload_pid :: PID,       
+      eventPayload_ppid :: PID,      -- ^ parent proecess id
+      eventPayload_tid :: TID,       
+      eventPayload_ptid :: TID,      -- ^ parent thread id
+      eventPayload_time :: TimeStamp -- ^ timestamp
    }
-   -- Corresponds with the exit_event struct in <perf source>/util/event.h (without the header)
+   -- Corresponds with the @exit_event@ struct in @\<perf source\>\/util\/event.h@ (without the header)
    | ExitEvent {
-      eventPayload_pid :: PID,       -- process id
-      eventPayload_ppid :: PID,      -- parent proecess id
-      eventPayload_tid :: TID,       -- thread id
-      eventPayload_ptid :: TID,      -- parent thread id
-      eventPayload_time :: TimeStamp -- timestamp
+      eventPayload_pid :: PID,       
+      eventPayload_ppid :: PID,      
+      eventPayload_tid :: TID,       
+      eventPayload_ptid :: TID,      
+      eventPayload_time :: TimeStamp 
    }
-   -- Corresponds with the lost_event struct in <perf source>/util/event.h (without the header)
+   -- Corresponds with the @lost_event@ struct in @\<perf source\>\/util\/event.h@ (without the header)
    | LostEvent {
       eventPayload_id :: EventID,
       eventPayload_Lost :: Word64
    }
-   -- Corresponds with the read_event struct in <perf source>/util/event.h (without the header)
+   -- Corresponds with the @read_event@ struct in @\<perf source\>\/util\/event.h@ (without the header)
    | ReadEvent {
       eventPayload_pid :: PID,
       eventPayload_tid :: TID,
@@ -424,22 +463,22 @@ data EventPayload =
       eventPayload_id :: EventID 
    }
    | SampleEvent {
-      eventPayload_SampleIP :: Maybe Word64,
-      eventPayload_SamplePID :: Maybe PID,
-      eventPayload_SampleTID :: Maybe TID,
-      eventPayload_SampleTime :: Maybe TimeStamp,
-      eventPayload_SampleAddr :: Maybe Word64,
-      eventPayload_SampleID :: Maybe EventID,
-      eventPayload_SampleStreamID :: Maybe Word64,
-      eventPayload_SampleCPU :: Maybe Word32,
-      eventPayload_SamplePeriod :: Maybe Word64
+      eventPayload_SampleIP :: Maybe Word64,       -- ^ Instruction pointer.
+      eventPayload_SamplePID :: Maybe PID,         -- ^ Process ID.
+      eventPayload_SampleTID :: Maybe TID,         -- ^ Thread ID.
+      eventPayload_SampleTime :: Maybe TimeStamp,  -- ^ Timestamp.
+      eventPayload_SampleAddr :: Maybe Word64,     --
+      eventPayload_SampleID :: Maybe EventID,      -- ^ Event ID.
+      eventPayload_SampleStreamID :: Maybe Word64, -- 
+      eventPayload_SampleCPU :: Maybe Word32,      -- ^ CPU ID.
+      eventPayload_SamplePeriod :: Maybe Word64    -- ^ Duration of sample.
    }
    -- ThrottleEvent and UnThrottleEvent are mentioned in
-   -- <system include directory>/linux/perf_event.h
-   -- but does not appear in <perf source>/util/event.h
+   -- @\<system include directory\>\/linux\/perf_event.h@
+   -- but does not appear in @\<perf source\>\/util\/event.h@
    | ThrottleEvent {
-      eventPayload_time :: TimeStamp,
-      eventPayload_id :: EventID,
+      eventPayload_time :: TimeStamp, 
+      eventPayload_id :: EventID,     
       eventPayload_stream_id :: Word64
    }
    | UnThrottleEvent {
@@ -447,7 +486,7 @@ data EventPayload =
       eventPayload_id :: EventID,
       eventPayload_stream_id :: Word64
    }
-   | UnknownEvent -- Something to return if we find PERF_RECORD_UNKNOWN
+   | UnknownEvent -- ^ An unrecognised event was encountered.
    deriving (Show)
 
 instance Pretty EventPayload where

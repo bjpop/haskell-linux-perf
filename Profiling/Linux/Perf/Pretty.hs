@@ -24,11 +24,13 @@ import Data.ByteString.Lazy.Char8 (unpack)
 import Data.Bits (testBit, Bits, bitSize)
 
 -- -----------------------------------------------------------------------------
--- Pretty printing interface
 
+-- | Pretty printing interface.
 class Pretty a where
+   -- ^ Generate a document for a value.
    pretty :: a -> Doc
 
+-- | Render an instance of "Pretty" as a "String".
 prettyString :: Pretty a => a -> String
 prettyString = render . pretty
 
@@ -54,9 +56,11 @@ instance (Pretty a, Pretty b) => Pretty (a, b) where
 instance Pretty ByteString where
    pretty = text . unpack
 
+-- | Render an instance of "Bits" as a list of "Bool", where "True" represents the high bit and "False" represents the low bit.
 bits :: Bits a => a -> [Bool]
 bits x = map (testBit x) [0 .. bitSize x - 1]
 
+-- | Render an instance of "Bits" as a "String". 
 showBits :: Bits a => a -> String
 showBits = map toBit . bits
    where

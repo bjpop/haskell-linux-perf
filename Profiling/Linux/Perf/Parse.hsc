@@ -8,8 +8,8 @@
 -- Stability   : experimental
 -- Portability : ghc
 --
--- A library to parse and pretty print the contents of "perf.data" file
--- "perf.data" is the the output of the "perf record" command on
+-- A library to parse and pretty print the contents of @perf.data@ file,
+-- the the output of the @perf record@ command on
 -- linux (linux performance counter information).
 --
 -----------------------------------------------------------------------------
@@ -491,13 +491,21 @@ parseEvent sampleType = do
 
 -- -----------------------------------------------------------------------------
 
-readEventHeader :: Handle -> Word64 -> IO EventHeader
+-- | Read an "EventHeader" from the input file handle.
+-- readEventHeader :: Handle -> Word64 -> IO EventHeader
+readEventHeader :: Handle        -- ^ Input file.
+                -> ByteCount64   -- ^ Byte offset from the start of the file to the start of the event header.
+                -> IO EventHeader
 readEventHeader h offset = do
    hSeek h AbsoluteSeek $ fromIntegral offset
    b <- B.hGet h (#size struct perf_event_header)
    runGetEventsCheck parseEventHeader b
 
-readEvent :: Handle -> ByteCount64 -> SampleTypeBitMap -> IO Event
+-- | Read an event record from the input file handle.
+readEvent :: Handle           -- ^ Input file.
+          -> ByteCount64      -- ^ Offset from the start of the file to the start of the event.
+          -> SampleTypeBitMap -- ^ A bitmap indicating what data is stored in a sample event.
+          -> IO Event
 readEvent h offset sampleType = do
    hSeek h AbsoluteSeek $ fromIntegral offset
    let headerSize = #size struct perf_event_header
@@ -508,12 +516,17 @@ readEvent h offset sampleType = do
    ev_payload <- runGetEventsCheck (parseEventPayload sampleType $ eh_type ev_header) payloadBytes
    return Event{..}
 
-readHeader :: Handle -> IO FileHeader
+-- | Read the perf data "FileHeader" from the input file handle.
+readHeader :: Handle -- ^ Input file.
+           -> IO FileHeader
 readHeader h = do
    b <- B.hGet h (#size struct perf_file_header)
    runGetEventsCheck parseFileHeader b
 
-readAttributes :: Handle -> FileHeader -> IO [FileAttr]
+-- | Read the perf event attributes from the input file handle. 
+readAttributes :: Handle       -- ^ Input file.
+               -> FileHeader   -- ^ Perf file header containing the byte offset of the attribute data.
+               -> IO [FileAttr]
 readAttributes h fh = do
    -- XXX I wonder if this calculation should be:
    -- fh_attrs_size fh `quot` fh_attr_size fh ?
@@ -522,7 +535,10 @@ readAttributes h fh = do
    b <- B.hGet h (fromIntegral (fh_attrs_size fh))
    runGetEventsCheck (replicateM (fromIntegral nr_attrs) parseFileAttr) b
 
-readAttributeIDs :: Handle -> FileAttr -> IO [EventID]
+-- | Read the "EventID"s from the input file handle.
+readAttributeIDs :: Handle      -- ^ Input file.
+                 -> FileAttr    -- ^ File attribute containing the byte offset of the event ID data.
+                 -> IO [EventID]
 readAttributeIDs h attr = do
    let offset = fromIntegral $ fa_ids_offset attr
        size = fromIntegral $ fa_ids_size attr
@@ -531,7 +547,10 @@ readAttributeIDs h attr = do
    ws <- runGetEventsCheck (replicateM (size `div` bytesInWord64) getU64) b
    return $ map EventID ws
 
-readEventTypes :: Handle -> FileHeader -> IO [TraceEventType]
+-- | Read the event type information from the input file handle. 
+readEventTypes :: Handle             -- ^ Input file.
+               -> FileHeader         -- ^ Perf file header containing the byte offset of the event type data.
+               -> IO [TraceEventType]
 readEventTypes h fh = do
    hSeek h AbsoluteSeek (fromIntegral (fh_event_offset fh))
    loop nr_types []

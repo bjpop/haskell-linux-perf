@@ -13,12 +13,11 @@
 
 import GHC.RTS.Events as GHC hiding (pid)
 import Profiling.Linux.Perf as Perf
-   ( readPerfData, makeTypeMap, sortEventsOnTime, PerfData (..)
-   , TypeMap, TypeInfo (..) )
+   ( readPerfData, makeTypeMap, sortEventsOnTime, TypeMap, TypeInfo (..) )
 import Profiling.Linux.Perf.Types as Perf
    ( PID (..), TID (..), EventSource (..), EventPayload (..), Event (..)
    , EventTypeID (..), TraceEventType (..) , FileAttr (..), EventAttr (..)
-   , TimeStamp (..) )
+   , TimeStamp (..), PerfData (..) )
 import Control.Monad (when)
 import System.Exit (exitWith, ExitCode (ExitFailure))
 import System.IO (hPutStrLn, stderr)
