@@ -1,3 +1,4 @@
+{-# LANGUAGE PatternGuards #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -51,7 +52,7 @@ import Profiling.Linux.Perf.Types
    , PerfData (..) )
 import Profiling.Linux.Perf.Pretty ( pretty )
 import Text.PrettyPrint as Pretty
-   ( render, Doc, empty, text, (<+>), (<>), vcat, ($$), int, hsep )
+   ( render, Doc, empty, text, (<+>), (<>), vcat, ($$), int, hsep, hcat )
 import Data.List as List (intersperse, sortBy, foldl')
 import Data.Map as Map hiding (mapMaybe, map, filter, null, foldr)
 import System.IO (openFile, IOMode(ReadMode), Handle)
@@ -127,20 +128,10 @@ makeTypeMap perfData =
       typeSource = ea_type attr 
       typeID = ea_config attr   
 
-{-
--- The various parts of the perf.data file collected together.
-data PerfData =
-   PerfData
-   { perfData_fileHeader :: FileHeader
-   , perfData_attrs :: [FileAttr]
-   , perfData_idss :: [[EventID]]
-   , perfData_types :: [TraceEventType]
-   , perfData_events :: [Event] 
-   }
--}
-
 -- | Style to use for printing the event data.
-data OutputStyle = Dump -- ^ Output full details of the data file preserving the original order of the events.
+data OutputStyle
+   = Dump -- ^ Output full details of the data file preserving the original order of the events.
+   | Trace -- ^ Output command and sample events in time order with event type annotations.
 
 -- | Read the contents of the perf.data file and render it
 -- on stdout in a specified style.
@@ -172,6 +163,7 @@ display :: OutputStyle -> PerfData -> IO ()
 display style contents = do
    putStrLn $ render $ case style of
       Dump -> dumper contents
+      Trace -> tracer contents
 
 -- | Get the Sample Type and test the sample_id_all bit in the flags field.
 getAttrInfo :: [FileAttr] -> [(SampleTypeBitMap, Bool)]
@@ -216,3 +208,38 @@ dumper (PerfData header attrs idss types events) =
       pretty attr $$ (text "ids:" <+> (hsep $ map pretty ids))
    separator :: Doc
    separator = text $ replicate 40 '-'
+
+-- | Print a time sorted sequence of comm and sample events. Sample events
+-- show their human-friendly source name.
+tracer :: PerfData -> Doc
+tracer perfData@(PerfData header attrs idss types events) =
+   vcat $ map (prettyPayload typeMap . ev_payload) sortedEvents
+   where
+   -- Render a list of docs in comma separated form.
+   csv :: [Doc] -> Doc
+   csv = hcat . intersperse (text ", ") 
+   sortedEvents = sortEventsOnTime events
+   typeMap = makeTypeMap perfData
+   prettyPayload :: TypeMap -> EventPayload -> Doc
+   prettyPayload _typeMap ev@(CommEvent {}) =
+      csv [ text "PID" <+> (pretty . eventPayload_pid) ev 
+          , text "TID" <+> (pretty . eventPayload_tid) ev
+          , text "command" <+> (pretty . eventPayload_CommName) ev ]
+   prettyPayload typeMap ev@(SampleEvent {}) =
+      csv [ text "PID" <+> (pretty . eventPayload_SamplePID) ev
+          , text "TID" <+> (pretty . eventPayload_SampleTID) ev
+          , sampleDoc
+          , text "time" <+> (pretty . eventPayload_SampleTime) ev
+          , text "CPU" <+> (pretty . eventPayload_SampleCPU) ev
+          , text "IP" <+> (pretty . eventPayload_SampleIP) ev
+          , text "Addr" <+> (pretty . eventPayload_SampleAddr) ev
+          , text "Stream" <+> (pretty . eventPayload_SampleStreamID) ev
+          , text "Period" <+> (pretty . eventPayload_SamplePeriod) ev ]
+      where
+      -- Try to retrieve the sample event source from the type info for this event.
+      sampleDoc
+         | Just id <- eventPayload_SampleID ev,
+           Just typeInfo <- Map.lookup id typeMap =
+                text "sample" <+> (text . typeInfo_name) typeInfo 
+         | otherwise = text "sample <unknown source>"
+   prettyPayload _typeMap other = Pretty.empty
