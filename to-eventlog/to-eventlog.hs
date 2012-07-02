@@ -11,7 +11,7 @@
 --
 -----------------------------------------------------------------------------
 
-import GHC.RTS.Events as GHC hiding (pid)
+import qualified GHC.RTS.Events as GHC
 import Profiling.Linux.Perf as Perf
    ( readPerfData, makeTypeMap, sortEventsOnTime, TypeMap, TypeInfo (..) )
 import Profiling.Linux.Perf.Types as Perf
@@ -44,7 +44,7 @@ main = do
              -- convert the perf data to ghc events
              let perfEventlog = perfToEventlog pid perfFileContents
              -- write the ghc events out to file
-             writeEventLogToFile outFile perfEventlog
+             GHC.writeEventLogToFile outFile perfEventlog
     _ -> die "Syntax: to-eventlog [pid perf_file eventlog_file]"
 
 -- exit the program with an error message
@@ -59,16 +59,16 @@ parsePID str
 
 -- Convert linux perf event data into a ghc event log.
 -- The PID identifies the process that we are tracing.
-perfToEventlog :: PID -> PerfData -> EventLog
+perfToEventlog :: PID -> PerfData -> GHC.EventLog
 perfToEventlog pid perfData =
    eventLog $ perfToGHC pid (makeTypeMap perfData) sortedEventPayloads
    where
    -- sort the events by timestamp order
    sortedEventPayloads :: [EventPayload]
-   sortedEventPayloads = 
+   sortedEventPayloads =
       map ev_payload $ sortEventsOnTime $ perfData_events perfData
-   eventLog :: [GHC.Event] -> EventLog
-   eventLog events = EventLog (Header testEventTypes) (Data events)
+   eventLog :: [GHC.Event] -> GHC.EventLog
+   eventLog events = GHC.EventLog (GHC.Header testEventTypes) (GHC.Data events)
 
 type TypeNameAndID = (String, Word32 {- PerfEventTypeNum -} )
 type TypeSet = Set TypeNameAndID
@@ -79,7 +79,7 @@ perfToGHC :: PID            -- process ID
           -> [EventPayload] -- perf events in sorted time order
           -> [GHC.Event]    -- ghc event log
 perfToGHC targetPID typeMap perfEvents =
-   typeEvents ++ reverse ghcEvents 
+   typeEvents ++ reverse ghcEvents
    where
    typeEvents :: [GHC.Event]
    typeEvents = mkTypeEvents $ Set.toList typeEventSet
@@ -88,33 +88,38 @@ perfToGHC targetPID typeMap perfEvents =
    (typeEventSet, ghcEvents) = List.foldl' perfToGHCWorker (Set.empty, []) perfEvents
    -- convert the set of perf type infos into a list of events
    mkTypeEvents :: [TypeNameAndID] -> [GHC.Event]
-   mkTypeEvents = map (\(name, id) -> GHC.Event 0 $ PerfName id name)
+   mkTypeEvents = map (\(name, id) -> GHC.Event 0 $ GHC.PerfName id name)
    -- extract a new type event and ghc event from the next perf event
    -- and update the state
-   perfToGHCWorker :: EventState -> EventPayload -> EventState 
-   perfToGHCWorker state@(typeSet, events) se@(SampleEvent {}) = 
+   perfToGHCWorker :: EventState -> EventPayload -> EventState
+   perfToGHCWorker state@(typeSet, events) se@(SampleEvent {}) =
       maybe state id $ do
          eventPID <- eventPayload_SamplePID se
          eventTID <- eventPayload_SampleTID se
-         eventID <- eventPayload_SampleID se 
+         eventID <- eventPayload_SampleID se
          eventTime <- eventPayload_SampleTime se
+         eventPeriod <- eventPayload_SamplePeriod se
          if (eventPID == targetPID) then do
             -- lookup the event type for this event
             TypeInfo typeName typeSource typeID <- Map.lookup eventID typeMap
-            let newTypeSet = Set.insert (typeName, ghcTypeID) typeSet 
-                ghcTID = fromIntegral $ tid eventTID
+            let newTypeSet = Set.insert (typeName, ghcTypeID) typeSet
+                ghcTID = GHC.KernelThreadId $ fromIntegral $ tid eventTID
                 ghcTypeID = fromIntegral $ eventTypeID typeID
                 -- generate the appropriate ghc event
                 newEvent = GHC.Event (timeStamp eventTime) newEventBody
                 newEventBody
                    -- it is a tracepoint
-                   | typeSource == PerfTypeTracePoint = PerfTracepoint ghcTypeID ghcTID
+                   | typeSource == PerfTypeTracePoint =
+                       GHC.PerfTracepoint ghcTypeID ghcTID
                    -- it is some kind of counter
-                   | otherwise = PerfCounter ghcTypeID 0 -- XXX count is incorrect
+                   | otherwise =
+                       GHC.PerfCounter ghcTypeID ghcTID eventPeriod
             seq newTypeSet $ return (newTypeSet, newEvent:events)
             else Nothing
    -- skip any other type of event which is not a SampleEvent
    perfToGHCWorker eventState otherEvent = eventState
+
+-- Test data:
 
 perfName :: Word16
 perfName = 140
@@ -125,12 +130,13 @@ perfCounter = 141
 perfTracepoint :: Word16
 perfTracepoint = 142
 
-testEventTypes :: [EventType]
+testEventTypes :: [GHC.EventType]
 testEventTypes =
-  [ EventType perfName "perf event name" Nothing
-  , EventType perfCounter "perf event counter" (Just $ sz_perf_num + 8)
-  , EventType perfTracepoint "perf event tracepoint"
-      (Just $ sz_perf_num + sz_tid)
+  [ GHC.EventType perfName "perf event name" Nothing
+  , GHC.EventType perfCounter "perf event counter"
+                  (Just $ sz_perf_num + sz_kernel_tid + 8)
+  , GHC.EventType perfTracepoint "perf event tracepoint"
+                  (Just $ sz_perf_num + sz_kernel_tid)
   ]
 
 type EventTypeSize = Word16
@@ -138,5 +144,5 @@ type EventTypeSize = Word16
 sz_perf_num :: EventTypeSize
 sz_perf_num = 4
 
-sz_tid :: EventTypeSize
-sz_tid  = 4
+sz_kernel_tid :: EventTypeSize
+sz_kernel_tid = 8
