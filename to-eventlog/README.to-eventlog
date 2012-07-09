@@ -1,0 +1,31 @@
+Sample usage, illustrated with the test data files.
+
+The test data files parlist.perf.data and parlist.eventlog were obtained with
+
+sudo rec-perf ./parlist +RTS -N3 -l-g-p
+
+where parlist is the Haskell program from 
+
+https://github.com/Mikolaj/threadscope-sparkgraph-demo/blob/master/parlist.hs
+
+compiled with 
+
+ghc --make -eventlog -rtsopts -threaded -debug parlist.hs 
+
+Now, the perf data can be transformed to a perf eventlog with
+
+to-eventlog parlist.perf.data parlist.perf.eventlog
+
+The eventlog can be viewed with
+
+ghc-events show parlist.perf.eventlog | less
+
+the two eventlogs can be merged with 
+
+ghc-events merge parlist.all.eventlog parlist.eventlog parlist.perf.eventlog
+
+and the resulting big eventlog is best viewed in ThreadScope with
+
+threadscope parlist.all.eventlog
+
+in the Instant Events tab, with the Event Labels on.
