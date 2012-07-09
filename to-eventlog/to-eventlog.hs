@@ -68,7 +68,8 @@ perfToEventlog pid perfData =
    sortedEventPayloads =
       map ev_payload $ sortEventsOnTime $ perfData_events perfData
    eventLog :: [GHC.Event] -> GHC.EventLog
-   eventLog events = GHC.EventLog (GHC.Header testEventTypes) (GHC.Data events)
+   eventLog events = GHC.EventLog (GHC.Header perfEventlogHeader)
+                                  (GHC.Data events)
 
 type TypeNameAndID = (String, Word32 {- PerfEventTypeNum -} )
 type TypeSet = Set TypeNameAndID
@@ -119,30 +120,11 @@ perfToGHC targetPID typeMap perfEvents =
    -- skip any other type of event which is not a SampleEvent
    perfToGHCWorker eventState otherEvent = eventState
 
--- Test data:
-
-perfName :: Word16
-perfName = 140
-
-perfCounter :: Word16
-perfCounter = 141
-
-perfTracepoint :: Word16
-perfTracepoint = 142
-
-testEventTypes :: [GHC.EventType]
-testEventTypes =
-  [ GHC.EventType perfName "perf event name" Nothing
-  , GHC.EventType perfCounter "perf event counter"
-                  (Just $ sz_perf_num + sz_kernel_tid + 8)
-  , GHC.EventType perfTracepoint "perf event tracepoint"
-                  (Just $ sz_perf_num + sz_kernel_tid)
+perfEventlogHeader :: [GHC.EventType]
+perfEventlogHeader =
+  [ GHC.EventType GHC.nEVENT_PERF_NAME "perf event name" Nothing
+  , GHC.EventType GHC.nEVENT_PERF_COUNTER "perf event counter"
+                  (Just $ GHC.sz_perf_num + GHC.sz_kernel_tid + 8)
+  , GHC.EventType GHC.nEVENT_PERF_TRACEPOINT "perf event tracepoint"
+                  (Just $ GHC.sz_perf_num + GHC.sz_kernel_tid)
   ]
-
-type EventTypeSize = Word16
-
-sz_perf_num :: EventTypeSize
-sz_perf_num = 4
-
-sz_kernel_tid :: EventTypeSize
-sz_kernel_tid = 8
