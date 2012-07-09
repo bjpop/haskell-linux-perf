@@ -25,7 +25,7 @@ import System.Environment (getArgs)
 import Data.Word (Word32, Word16)
 import Data.Map (toList)
 import Data.Set as Set (fromList, Set, member, empty, insert, toList)
-import Data.Maybe (mapMaybe)
+import Data.Maybe (mapMaybe, fromMaybe)
 import Data.Char (isDigit)
 import Data.Map as Map hiding (mapMaybe, map, filter, null, foldr)
 import Data.List as List (sortBy, foldl')
@@ -93,13 +93,12 @@ perfToGHC targetPID typeMap perfEvents =
    -- extract a new type event and ghc event from the next perf event
    -- and update the state
    perfToGHCWorker :: EventState -> EventPayload -> EventState
-   perfToGHCWorker state@(typeSet, events) se@(SampleEvent {}) =
+   perfToGHCWorker state@(typeSet, events) SampleEvent{..} =
       maybe state id $ do
-         eventPID <- eventPayload_SamplePID se
-         eventTID <- eventPayload_SampleTID se
-         eventID <- eventPayload_SampleID se
-         eventTime <- eventPayload_SampleTime se
-         eventPeriod <- eventPayload_SamplePeriod se
+         eventPID <- eventPayload_SamplePID
+         eventTID <- eventPayload_SampleTID
+         eventID <- eventPayload_SampleID
+         eventTime <- eventPayload_SampleTime
          if (eventPID == targetPID) then do
             -- lookup the event type for this event
             TypeInfo typeName typeSource typeID <- Map.lookup eventID typeMap
@@ -114,7 +113,8 @@ perfToGHC targetPID typeMap perfEvents =
                        GHC.PerfTracepoint ghcTypeID ghcTID
                    -- it is some kind of counter
                    | otherwise =
-                       GHC.PerfCounter ghcTypeID ghcTID eventPeriod
+                       let eventPeriod = fromMaybe 0 eventPayload_SamplePeriod
+                       in GHC.PerfCounter ghcTypeID ghcTID eventPeriod
             seq newTypeSet $ return (newTypeSet, newEvent:events)
             else Nothing
    -- skip any other type of event which is not a SampleEvent
