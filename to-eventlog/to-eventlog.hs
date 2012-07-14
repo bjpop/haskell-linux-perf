@@ -22,7 +22,7 @@ import Control.Monad (when)
 import System.Exit (exitWith, ExitCode (ExitFailure))
 import System.IO (hPutStrLn, stderr)
 import System.Environment (getArgs)
-import Data.Word (Word32, Word16)
+import Data.Word (Word64, Word32, Word16)
 import Data.Map (toList)
 import Data.Set as Set (fromList, Set, member, empty, insert, toList)
 import Data.Maybe (mapMaybe, fromMaybe)
@@ -42,7 +42,9 @@ main = do
              -- read the linux perf data file
              perfFileContents <- readPerfData inFile
              -- convert the perf data to ghc events
-             let perfEventlog = perfToEventlog pid perfFileContents
+             -- TODO: take the timestamp from somewhere (e.g., a perf event
+             -- or a ghc-events event or a command-line argument).
+             let perfEventlog = perfToEventlog pid Nothing perfFileContents
              -- write the ghc events out to file
              GHC.writeEventLogToFile outFile perfEventlog
     _ -> die "Syntax: to-eventlog [pid perf_file eventlog_file]"
@@ -59,9 +61,9 @@ parsePID str
 
 -- Convert linux perf event data into a ghc event log.
 -- The PID identifies the process that we are tracing.
-perfToEventlog :: PID -> PerfData -> GHC.EventLog
-perfToEventlog pid perfData =
-   eventLog $ perfToGHC pid (makeTypeMap perfData) sortedEventPayloads
+perfToEventlog :: PID -> Maybe Word64 -> PerfData -> GHC.EventLog
+perfToEventlog pid mstart perfData =
+   eventLog $ perfToGHC pid mstart (makeTypeMap perfData) sortedEventPayloads
    where
    -- sort the events by timestamp order
    sortedEventPayloads :: [EventPayload]
@@ -76,10 +78,11 @@ type TypeSet = Set TypeNameAndID
 type EventState = (TypeSet, [GHC.Event])
 
 perfToGHC :: PID            -- process ID
+          -> Maybe Word64   -- initial timestamp
           -> TypeMap        -- mapping from event ID to event type info
           -> [EventPayload] -- perf events in sorted time order
           -> [GHC.Event]    -- ghc event log
-perfToGHC targetPID typeMap perfEvents =
+perfToGHC targetPID mstart typeMap perfEvents =
    typeEvents ++ reverse ghcEvents
    where
    typeEvents :: [GHC.Event]
@@ -98,7 +101,8 @@ perfToGHC targetPID typeMap perfEvents =
          eventPID <- eventPayload_SamplePID
          eventTID <- eventPayload_SampleTID
          eventID <- eventPayload_SampleID
-         eventTime <- eventPayload_SampleTime
+         absoluteTime <- fmap timeStamp eventPayload_SampleTime
+         let relativeTime = absoluteTime - (fromMaybe 0 mstart)
          if (eventPID == targetPID) then do
             -- lookup the event type for this event
             TypeInfo typeName typeSource typeID <- Map.lookup eventID typeMap
@@ -106,7 +110,7 @@ perfToGHC targetPID typeMap perfEvents =
                 ghcTID = GHC.KernelThreadId $ fromIntegral $ tid eventTID
                 ghcTypeID = fromIntegral $ eventTypeID typeID
                 -- generate the appropriate ghc event
-                newEvent = GHC.Event (timeStamp eventTime) newEventBody
+                newEvent = GHC.Event relativeTime newEventBody
                 newEventBody
                    -- it is a tracepoint
                    | typeSource == PerfTypeTracePoint =
