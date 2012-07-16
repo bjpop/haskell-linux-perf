@@ -54,7 +54,7 @@ import Profiling.Linux.Perf.Pretty ( pretty )
 import Text.PrettyPrint as Pretty
    ( render, Doc, empty, text, (<+>), (<>), vcat, ($$), int, hsep, hcat )
 import Data.List as List (intersperse, sortBy, foldl')
-import Data.Map as Map hiding (mapMaybe, map, filter, null, foldr)
+import Data.Map as Map hiding (mapMaybe, map, filter, null)
 import System.IO (openFile, IOMode(ReadMode), Handle)
 import Data.Maybe (mapMaybe)
 import Data.ByteString.Lazy.Char8 (unpack)
