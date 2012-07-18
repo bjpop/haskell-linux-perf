@@ -15,7 +15,7 @@ import qualified GHC.RTS.Events as GHC
 import Profiling.Linux.Perf as Perf
    ( readPerfData, makeTypeMap, sortEventsOnTime, TypeMap, TypeInfo (..) )
 import Profiling.Linux.Perf.Types as Perf
-   ( PID (..), TID (..), EventSource (..), EventPayload (..), Event (..)
+   ( TID (..), EventSource (..), EventPayload (..), Event (..)
    , EventTypeID (..), TraceEventType (..) , FileAttr (..), EventAttr (..)
    , TimeStamp (..), PerfData (..) )
 import Control.Monad (when)
@@ -35,35 +35,25 @@ main = do
   -- read and parse the command line arguments
   args <- getArgs
   case args of
-    [pidStr, inFile, outFile] ->
-       case parsePID pidStr of
-          Nothing -> die "Invalid PID argument, must be an integer"
-          Just pid -> do
-             -- read the linux perf data file
-             perfFileContents <- readPerfData inFile
-             -- convert the perf data to ghc events
-             -- TODO: take the timestamp from somewhere (e.g., a perf event
-             -- or a ghc-events event or a command-line argument).
-             let perfEventlog = perfToEventlog pid Nothing perfFileContents
-             -- write the ghc events out to file
-             GHC.writeEventLogToFile outFile perfEventlog
-    _ -> die "Syntax: to-eventlog [pid perf_file eventlog_file]"
+    [inFile, outFile] -> do
+      -- read the linux perf data file
+      perfFileContents <- readPerfData inFile
+      -- convert the perf data to ghc events
+      -- TODO: take the timestamp from somewhere (e.g., a perf event
+      -- or a ghc-events event or a command-line argument).
+      let perfEventlog = perfToEventlog Nothing perfFileContents
+      -- write the ghc events out to file
+      GHC.writeEventLogToFile outFile perfEventlog
+    _ -> die "Syntax: to-eventlog [perf_file eventlog_file]"
 
 -- exit the program with an error message
 die :: String -> IO a
 die s = hPutStrLn stderr s >> exitWith (ExitFailure 1)
 
--- parse the command line input for a valid process ID
-parsePID :: String -> Maybe PID
-parsePID str
-   | length str > 0 && all isDigit str = Just $ PID $ read str
-   | otherwise = Nothing
-
 -- Convert linux perf event data into a ghc event log.
--- The PID identifies the process that we are tracing.
-perfToEventlog :: PID -> Maybe Word64 -> PerfData -> GHC.EventLog
-perfToEventlog pid mstart perfData =
-   eventLog $ perfToGHC pid mstart (makeTypeMap perfData) sortedEventPayloads
+perfToEventlog :: Maybe Word64 -> PerfData -> GHC.EventLog
+perfToEventlog mstart perfData =
+   eventLog $ perfToGHC mstart (makeTypeMap perfData) sortedEventPayloads
    where
    -- sort the events by timestamp order
    sortedEventPayloads :: [EventPayload]
@@ -77,12 +67,11 @@ type TypeNameAndID = (String, Word32 {- PerfEventTypeNum -} )
 type TypeSet = Set TypeNameAndID
 type EventState = (TypeSet, [GHC.Event])
 
-perfToGHC :: PID            -- process ID
-          -> Maybe Word64   -- initial timestamp
+perfToGHC :: Maybe Word64   -- initial timestamp
           -> TypeMap        -- mapping from event ID to event type info
           -> [EventPayload] -- perf events in sorted time order
           -> [GHC.Event]    -- ghc event log
-perfToGHC targetPID mstart typeMap perfEvents =
+perfToGHC mstart typeMap perfEvents =
    typeEvents ++ reverse ghcEvents
    where
    typeEvents :: [GHC.Event]
@@ -98,29 +87,26 @@ perfToGHC targetPID mstart typeMap perfEvents =
    perfToGHCWorker :: EventState -> EventPayload -> EventState
    perfToGHCWorker state@(typeSet, events) SampleEvent{..} =
       maybe state id $ do
-         eventPID <- eventPayload_SamplePID
          eventTID <- eventPayload_SampleTID
          eventID <- eventPayload_SampleID
          absoluteTime <- fmap timeStamp eventPayload_SampleTime
          let relativeTime = absoluteTime - (fromMaybe 0 mstart)
-         if (eventPID == targetPID) then do
-            -- lookup the event type for this event
-            TypeInfo typeName typeSource typeID <- Map.lookup eventID typeMap
-            let newTypeSet = Set.insert (typeName, ghcTypeID) typeSet
-                ghcTID = GHC.KernelThreadId $ fromIntegral $ tid eventTID
-                ghcTypeID = fromIntegral $ eventTypeID typeID
-                -- generate the appropriate ghc event
-                newEvent = GHC.Event relativeTime newEventBody
-                newEventBody
-                   -- it is a tracepoint
-                   | typeSource == PerfTypeTracePoint =
-                       GHC.PerfTracepoint ghcTypeID ghcTID
-                   -- it is some kind of counter
-                   | otherwise =
-                       let eventPeriod = fromMaybe 0 eventPayload_SamplePeriod
-                       in GHC.PerfCounter ghcTypeID ghcTID eventPeriod
-            seq newTypeSet $ return (newTypeSet, newEvent:events)
-            else Nothing
+         -- lookup the event type for this event
+         TypeInfo typeName typeSource typeID <- Map.lookup eventID typeMap
+         let newTypeSet = Set.insert (typeName, ghcTypeID) typeSet
+             ghcTID = GHC.KernelThreadId $ fromIntegral $ tid eventTID
+             ghcTypeID = fromIntegral $ eventTypeID typeID
+             -- generate the appropriate ghc event
+             newEvent = GHC.Event relativeTime newEventBody
+             newEventBody
+                -- it is a tracepoint
+                | typeSource == PerfTypeTracePoint =
+                    GHC.PerfTracepoint ghcTypeID ghcTID
+                -- it is some kind of counter
+                | otherwise =
+                    let eventPeriod = fromMaybe 0 eventPayload_SamplePeriod
+                    in GHC.PerfCounter ghcTypeID ghcTID eventPeriod
+         seq newTypeSet $ return (newTypeSet, newEvent:events)
    -- skip any other type of event which is not a SampleEvent
    perfToGHCWorker eventState otherEvent = eventState
 
