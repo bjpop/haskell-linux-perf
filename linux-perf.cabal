@@ -120,3 +120,13 @@ Executable rec-perf {
   hs-source-dirs: rec-perf
   Build-depends: base==4.*, unix==2.5.*
 }
+
+Executable to-eventlog {
+  Main-is: to-eventlog.hs
+  hs-source-dirs: to-eventlog
+  Build-depends: linux-perf==0.2,
+                 base==4.*,
+                 ghc-events==0.4.1.*,
+                 containers==0.4.*,
+                 bytestring==0.9.*
+}
