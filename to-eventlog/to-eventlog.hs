@@ -27,7 +27,7 @@ import Data.Map (toList)
 import Data.Set as Set (fromList, Set, member, empty, insert, toList)
 import Data.Maybe (mapMaybe, fromMaybe)
 import Data.Char (isDigit)
-import Data.Map as Map hiding (mapMaybe, map, filter, null, foldr)
+import Data.Map as Map hiding (mapMaybe, map, filter, null)
 import Data.List as List (sortBy, foldl')
 
 main :: IO ()
