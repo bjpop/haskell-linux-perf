@@ -24,21 +24,20 @@
 -- We use the unix "sleep" command as the dummy process. Currently it is set
 -- to run for 60 seconds, but we should make it a parameter to rec-perf.
 --
--- Usage: rec-perf command [command-args ... ]
+-- Usage:
+-- rec-perf --RTS [ +RecPerf [rec-perf-args ... ] -RecPerf ] command [command-args ... ]
+--
+-- The --RTS is to stop ghc from grabbing any +RTS ... -RTS commands from
+-- the command line.
 --
 -- perf will write its output to the file "perf.data".
 --
 -- TODO:
---    - command line argument to specify how long the dummy sleep process
---      runs.
 --    - command line arguments to allow user to specify a set of events to
 --      to trace instead of the default ones.
---    - command line argument to get perf to save its output to a specific
---      file.
---    - a way to separate command line arguments for rec-perf from those of
---      the profilee command (probably "--").
 --    - decide what to do if we are waiting for a process and it stops
 --      instead of terminates/exits.
+--    - decide what to do if perf terminates before the child
 --
 -----------------------------------------------------------------------------
 
@@ -51,23 +50,159 @@ import System.Environment
 import Control.Concurrent
 import Control.Monad (when)
 import System.Exit
+import System.Console.GetOpt	
+import Data.Char (isDigit)
+import System.Directory
+   (findExecutable, getPermissions, executable, doesFileExist)
+import System.FilePath (splitFileName)
 
 main :: IO ()
 main = do
-   args <- getArgs
-   when (length args > 0) $ do
-      -- start a process for the command to be profiled
-      childPID <- forkProcess $ childProcess (head args) (tail args)
-      -- start a perf process attached to the (temporarily sleeping) child
-      perfPID <- forkProcess $ perfProcess childPID
-      -- wait for the child to terminate
-      waitForProcessTerminate childPID
-      -- terminate the perf process
-      -- perf seems to respect keyboard signal and flush its buffers
-      signalProcess keyboardSignal perfPID
-      -- wait for perf to terminate
-      waitForProcessTerminate perfPID
-      return ()
+   argv <- getArgs
+   let (recPerfArgv, otherArgv) = grabRecPerfArgv argv
+   recPerfOptions <- parseRecPerfOptions recPerfArgv
+   profileCommand recPerfOptions otherArgv
+
+profileCommand :: Options -> [String] -> IO ()
+profileCommand _options [] = ioError $ userError ("You did not supply a command to profile")
+profileCommand options (childCommand:childArgs) = do
+   childPath <- checkChildCommand childCommand
+   -- start a process for the command to be profiled
+   childPID <- forkProcess $ childProcess childPath childArgs
+   -- start a perf process attached to the childCommand 
+   perfPID <- forkProcess $ perfProcess options childPID
+   -- wait for the child to terminate
+   waitForProcessTerminate childPID
+   -- terminate the perf process
+   -- perf seems to respect keyboard signal and flush its buffers
+   signalProcess keyboardSignal perfPID
+   -- wait for perf to terminate
+   -- XXX what if this process ends before the child? 
+   waitForProcessTerminate perfPID
+   return ()
+
+-- Check if the child command exists and is executable.
+checkChildCommand :: FilePath -> IO FilePath
+checkChildCommand childCommand = do
+   let (childCommandDir, childCommandFile) = splitFileName childCommand
+   childPath <-
+      if null childCommandDir
+         -- child command was not prefixed with a directory path
+         then do
+            -- try to look up the command in the PATH environment
+            maybeChildPath <- findExecutable childCommand
+            case maybeChildPath of
+               Nothing -> ioError $ userError ("Command: " ++ childCommand ++ " not found")
+               Just childPath -> return childPath
+      else
+         return childCommand
+   exists <- doesFileExist childPath 
+   if exists
+      then do
+         -- check if we can execute the command
+         perms <- getPermissions childPath	
+         if executable perms
+            then return childPath
+            else ioError $ userError ("You do not have permission to execute command: " ++ childPath)
+      else ioError $ userError ("File: " ++ childPath ++ " does not exist")
+
+data Options = Options
+   { options_wait :: Integer
+   , options_events :: [String]
+   , options_dummy :: String
+   , options_output :: FilePath
+   , options_help :: Bool 
+   } deriving Show
+
+defaultOptions :: Options
+defaultOptions = Options
+   { options_wait = defaultWait 
+   , options_events = []
+   , options_dummy = defaultDummyCommand
+   , options_output = defaultPerfOutputFile 
+   , options_help = False
+   }
+
+defaultDummyCommand :: String
+defaultDummyCommand = "sleep 60"
+
+defaultWait :: Integer
+defaultWait = 500000
+
+defaultPerfOutputFile :: FilePath
+defaultPerfOutputFile = "perf.data"
+
+parseRecPerfOptions :: [String] -> IO Options
+parseRecPerfOptions argv =
+   case getOpt Permute options argv of
+      (foundOptions, _unknowns, errors@[]) -> do
+         let options = foldl (flip id) defaultOptions foundOptions
+         if options_help options
+            then do
+               putStrLn usage
+               exitSuccess
+            else return options
+      (_flags, _unknowns , errs@(_:_)) -> 
+         ioError $ userError (concat errs ++ usage)
+
+usage :: String
+usage = usageInfo header options
+
+header :: String
+header = "Usage: rec-perf --RTS [ +RecPerf [rec-perf-args ... ] -RecPerf ] command [command-args ... ]"
+
+options :: [OptDescr (Options -> Options)]
+options =
+      [ Option
+           "w" ["wait"] 
+           (ReqArg (\i opts -> opts { options_wait = safeReadInt "wait" i }) "T")
+           ("Time in microseconds to pause profilee to allow perf to attach to it. " ++
+           "Defaults to " ++ show defaultWait ++ ".")
+
+      , Option
+           "e" ["event"]
+           (ReqArg (\e opts -> opts { options_events = e : options_events opts }) "E")
+           "Event to trace, instead of default events. Can be specified multiple times."
+
+      , Option
+           "d" ["dummy"]
+           (ReqArg (\s opts -> opts { options_dummy = s }) "C")
+           ("Dummy command to control how long perf-record runs for. " ++
+           "Defaults to " ++ show defaultDummyCommand ++ ".")
+
+      , Option
+           "h" ["help"]
+           (NoArg $ \opts -> opts { options_help = True })
+           ("Display a help message for this program.")
+
+      , Option
+           "o" ["output"]
+           (ReqArg (\f opts -> opts { options_output = f }) "OUT")
+           ("Output file to store perf record data. " ++
+           "Defaults to " ++ show defaultPerfOutputFile ++ ".")
+      ]
+
+safeReadInt :: String -> String -> Integer
+safeReadInt option cs
+   | length cs > 0 && all isDigit cs = read cs
+   | otherwise =
+        error ("The argument for option " ++ option ++
+               " should be an integer, but it was " ++ cs)
+
+-- Cut out all the arguments between +RecPerf -RecPerf from the command
+-- line. Return two lists: 1) everything between the markers, and 2) everything else
+grabRecPerfArgv :: [String] -> ([String], [String])
+grabRecPerfArgv cmdline = 
+   (reverse ins, reverse outs)
+   where
+   (ins, outs) = outside cmdline ([], [])
+   outside, inside :: [String] -> ([String], [String]) -> ([String], [String])
+   outside [] acc = acc
+   outside ("+RecPerf":rest) acc = inside rest acc
+   outside (str:rest) (ins, outs) = outside rest (ins, str:outs)
+   inside [] acc = acc
+   inside ("-RecPerf":rest) acc = outside rest acc
+   inside (str:rest) (ins, outs) = inside rest (str:ins, outs)
 
 waitForProcessTerminate :: ProcessID -> IO ()
 waitForProcessTerminate pid = do
@@ -91,14 +226,18 @@ childProcess command args = do
    -- run the command to be profiled
    executeFile command True args Nothing
 
-perfProcess :: ProcessID -> IO ()
-perfProcess pid = do
+perfProcess :: Options -> ProcessID -> IO ()
+perfProcess options pid = do
     executeFile "perf" True
-       ["record",
+       (["record",
 
         -- record on all CPUs
 
         "-a", 
+
+        -- output to this file
+
+        "-o", options_output options,
 
         -- count every event
 
@@ -133,7 +272,7 @@ perfProcess pid = do
         "-e", "raw_syscalls:sys_enter",
         "-e", "raw_syscalls:sys_exit", 
         "-e", "syscalls:sys_enter_gettimeofday",
-        "-e", "syscalls:sys_exit_gettimeofday", 
+        "-e", "syscalls:sys_exit_gettimeofday"
 
         -- dummy process.
         -- Perf terminates if this process terminates.
@@ -143,7 +282,6 @@ perfProcess pid = do
         -- generate large files, which are dangerous
         -- if run as root (which is commonly required). 
 
-        "sleep", "60" 
+       ] ++ (words $ options_dummy options))
 
-       ]
        Nothing

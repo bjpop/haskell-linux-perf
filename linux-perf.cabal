@@ -118,7 +118,10 @@ Executable dump-perf {
 Executable rec-perf {
   Main-is: rec-perf.hs
   hs-source-dirs: rec-perf
-  Build-depends: base==4.*, unix==2.5.*
+  Build-depends: base==4.*,
+                 unix==2.5.*,
+                 directory==1.1.*,
+                 filepath==1.2.*
 }
 
 Executable to-eventlog {
