@@ -122,6 +122,7 @@ Executable rec-perf {
                  unix==2.5.*,
                  directory==1.1.*,
                  filepath==1.2.*
+  other-modules: GetTimeOfDay
 }
 
 Executable to-eventlog {

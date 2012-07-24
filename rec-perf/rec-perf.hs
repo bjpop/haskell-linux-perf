@@ -56,6 +56,7 @@ import Data.Char (isDigit)
 import System.Directory
    (findExecutable, getPermissions, executable, doesFileExist)
 import System.FilePath (splitFileName)
+import GetTimeOfDay (getTimeOfDay)
 
 main :: IO ()
 main = do
@@ -229,6 +230,9 @@ profileeProcess :: Options -> FilePath -> [String] -> IO ()
 profileeProcess options command args = do
    -- wait for a short time to allow perf to start recording this process
    threadDelay $ options_wait options 
+   -- call gettimeofday to synchronise times
+   t <- getTimeOfDay
+   print t
    -- run the command to be profiled
    executeFile command True args Nothing
 
