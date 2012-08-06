@@ -113,6 +113,7 @@ Executable dump-perf {
   Build-depends: linux-perf==0.2,
                  base==4.*,
                  bytestring==0.9.*
+  ghc-options:   -rtsopts
 }
 
 Executable rec-perf {
@@ -121,8 +122,9 @@ Executable rec-perf {
   Build-depends: base==4.*,
                  unix==2.5.*,
                  directory==1.1.*,
-                 filepath==1.2.*
+                 filepath>=1.2
   other-modules: GetTimeOfDay
+  ghc-options:   -rtsopts
 }
 
 Executable to-eventlog {
@@ -133,4 +135,5 @@ Executable to-eventlog {
                  ghc-events==0.4.1.*,
                  containers==0.4.*,
                  bytestring==0.9.*
+  ghc-options:   -rtsopts
 }
