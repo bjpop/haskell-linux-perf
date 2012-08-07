@@ -1,31 +1,32 @@
 Sample usage, illustrated with the test data files.
 
-The test data files parlist.perf.data and parlist.eventlog were obtained with
+The test data files ParFib.perf.data and ParFib.eventlog were obtained with
 
-sudo rec-perf ./parlist +RTS -N3 -l-g-p
+sudo path-to/rec-perf +RecPerf -o ParFib.perf.data -RecPerf ./ParFib +RTS -N2 -l-g-p
 
-where parlist is the Haskell program from 
+where ParFib is the Haskell program from
 
-https://github.com/Mikolaj/threadscope-sparkgraph-demo/blob/master/parlist.hs
+https://github.com/Mikolaj/threadscope-sparkgraph-demo/blob/master/ParFib.hs
 
-compiled with 
+compiled with
 
-ghc --make -eventlog -rtsopts -threaded -debug parlist.hs 
+ghc --make -eventlog -rtsopts -threaded ParFib.hs
 
-Now, the perf data can be transformed to a perf eventlog with
+Now (after optioally changing the owner or permissions of ParFib.perf.data)
+the perf data can be transformed to a perf eventlog with
 
-to-eventlog parlist.perf.data parlist.perf.eventlog
+to-eventlog ParFib.perf.data ParFib.perf.eventlog
 
 The eventlog can be viewed with
 
-ghc-events show parlist.perf.eventlog | less
+ghc-events show ParFib.perf.eventlog | less
 
-the two eventlogs can be merged with 
+the two eventlogs can be merged with
 
-ghc-events merge parlist.all.eventlog parlist.eventlog parlist.perf.eventlog
+ghc-events merge ParFib.all.eventlog ParFib.eventlog ParFib.perf.eventlog
 
 and the resulting big eventlog is best viewed in ThreadScope with
 
-threadscope parlist.all.eventlog
+threadscope ParFib.all.eventlog
 
 in the Instant Events tab, with the Event Labels on.
