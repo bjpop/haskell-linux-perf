@@ -45,6 +45,7 @@
 module Main where
 
 import System.Posix.Types
+import System.Posix.Unistd
 import System.Posix.Process
 import System.Posix.Signals
 import System.Environment
@@ -233,6 +234,7 @@ profileeProcess options command args = do
    -- call gettimeofday to synchronise times
    t <- getTimeOfDay
    print t
+   nanosleep 3
    -- run the command to be profiled
    executeFile command True args Nothing
 
@@ -284,7 +286,9 @@ defaultEvents =
     "raw_syscalls:sys_enter",
     "raw_syscalls:sys_exit", 
     "syscalls:sys_enter_gettimeofday",
-    "syscalls:sys_exit_gettimeofday"
+    "syscalls:sys_exit_gettimeofday",
+    "syscalls:sys_enter_nanosleep",
+    "syscalls:sys_exit_nanosleep"
    ]
 
 -- Given two lists [a, b, c ..] [d, e, f ..]
