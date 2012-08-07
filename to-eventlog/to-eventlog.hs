@@ -18,7 +18,7 @@ import Profiling.Linux.Perf.Types as Perf
    ( TID (..), EventSource (..), EventPayload (..), Event (..), EventID
    , EventTypeID (..), TraceEventType (..) , FileAttr (..), EventAttr (..)
    , TimeStamp (..), PerfData (..) )
-import Control.Monad (when)
+import Control.Monad (when, guard)
 import System.Exit (exitWith, ExitCode (ExitFailure))
 import System.IO (hPutStrLn, stderr)
 import System.Environment (getArgs)
@@ -99,6 +99,7 @@ perfToGHC :: Maybe Word64   -- initial timestamp
 perfToGHC mstart typeMap perfEvents =
    typeEvents ++ reverse ghcEvents
    where
+   start = fromMaybe 0 mstart
    typeEvents :: [GHC.Event]
    typeEvents = mkTypeEvents $ Set.toList typeEventSet
    -- we fold over the list of perf events and collect a set of
@@ -115,7 +116,8 @@ perfToGHC mstart typeMap perfEvents =
          eventTID <- eventPayload_SampleTID
          eventID <- eventPayload_SampleID
          absoluteTime <- fmap timeStamp eventPayload_SampleTime
-         let relativeTime = absoluteTime - (fromMaybe 0 mstart)
+         guard $ absoluteTime > start
+         let relativeTime = absoluteTime - start
          -- lookup the event type for this event
          TypeInfo typeName typeSource typeID <- Map.lookup eventID typeMap
          let newTypeSet = Set.insert (typeName, ghcTypeID) typeSet
