@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, PatternGuards #-}
+{-# LANGUAGE RecordWildCards, PatternGuards, NamedFieldPuns #-}
 -----------------------------------------------------------------------------
 -- |
 -- Copyright   : (c) 2010,2011,2012 Simon Marlow, Bernie Pope, Mikolaj Konarski
@@ -15,7 +15,7 @@ import qualified GHC.RTS.Events as GHC
 import Profiling.Linux.Perf as Perf
    ( readPerfData, makeTypeMap, sortEventsOnTime, TypeMap, TypeInfo (..) )
 import Profiling.Linux.Perf.Types as Perf
-   ( TID (..), EventSource (..), EventPayload (..), Event (..)
+   ( TID (..), EventSource (..), EventPayload (..), Event (..), EventID
    , EventTypeID (..), TraceEventType (..) , FileAttr (..), EventAttr (..)
    , TimeStamp (..), PerfData (..) )
 import Control.Monad (when)
@@ -28,7 +28,7 @@ import Data.Set as Set (fromList, Set, member, empty, insert, toList)
 import Data.Maybe (mapMaybe, fromMaybe)
 import Data.Char (isDigit)
 import Data.Map as Map hiding (mapMaybe, map, filter, null)
-import Data.List as List (sortBy, foldl')
+import Data.List as List (sortBy, foldl', find)
 
 main :: IO ()
 main = do
@@ -39,12 +39,37 @@ main = do
       -- read the linux perf data file
       perfFileContents <- readPerfData inFile
       -- convert the perf data to ghc events
-      -- TODO: take the timestamp from somewhere (e.g., a perf event
-      -- or a ghc-events event or a command-line argument).
-      let perfEventlog = perfToEventlog Nothing perfFileContents
+      let startT = getStartTimestamp perfFileContents
+          perfEventlog = perfToEventlog startT perfFileContents
+      -- debug
+      print startT
       -- write the ghc events out to file
       GHC.writeEventLogToFile outFile perfEventlog
     _ -> die "Syntax: to-eventlog [perf_file eventlog_file]"
+
+-- Gets the timestamp of the first occurence of a perf sample event
+-- with markerEventId.
+getStartTimestamp :: PerfData -> Maybe Word64
+getStartTimestamp (PerfData header attrs idss types events) =
+  let isMarkerFileAttr (FileAttr {fa_attr = EventAttr {ea_config}}, _) =
+        ea_config == markerEventId
+      eids :: [EventID]
+      eids = concat $ map snd $ filter isMarkerFileAttr $ zip attrs idss
+      -- Sort the events by timestamp order to get the first occurence.
+      sortedEventPayloads :: [EventPayload]
+      sortedEventPayloads = map ev_payload $ sortEventsOnTime events
+      isMarkerPayload SampleEvent{eventPayload_SampleID = Just si} =
+        si `elem` eids
+      isMarkerPayload _ = False
+  in do
+    marker <- find isMarkerPayload sortedEventPayloads
+    stamp <- eventPayload_SampleTime marker
+    return $ timeStamp stamp
+
+--   id of the sys_exit_nanosleep syscall
+-- TODO: hardcoded for now, take it from the header instead
+markerEventId :: EventTypeID
+markerEventId = EventTypeID 273
 
 -- exit the program with an error message
 die :: String -> IO a
@@ -86,7 +111,7 @@ perfToGHC mstart typeMap perfEvents =
    -- and update the state
    perfToGHCWorker :: EventState -> EventPayload -> EventState
    perfToGHCWorker state@(typeSet, events) SampleEvent{..} =
-      maybe state id $ do
+      fromMaybe state $ do
          eventTID <- eventPayload_SampleTID
          eventID <- eventPayload_SampleID
          absoluteTime <- fmap timeStamp eventPayload_SampleTime
