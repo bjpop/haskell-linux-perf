@@ -9,7 +9,7 @@
 -- A program to "perf record" a trace of another command.
 --
 -- The linux performance counter tool "perf" can attach to a running process
--- and record events for just that PID. This program automates that activity  
+-- and record events for just that PID. This program automates that activity
 -- for a given command, which we will call the profilee. First it forks a
 -- process for the profilee, then it forks another process which attaches
 -- "perf record" onto the PID of the profilee. It then waits for the
@@ -19,7 +19,7 @@
 -- events in the profilee (otherwise we would have a condition where
 -- the profilee could start or even terminate before perf had begun
 -- recording events). Also note that when "perf record" is used in PID mode
--- it requires another dummy command which it uses to decide when to stop 
+-- it requires another dummy command which it uses to decide when to stop
 -- recording - that is, when the dummy process ends so does the perf process.
 -- We use the unix "sleep" command as the dummy process. Currently it is set
 -- to run for 60 seconds, but we should make it a parameter to rec-perf.
@@ -28,7 +28,7 @@
 -- rec-perf [--RTS]
 --          [ +RecPerf [rec-perf-args ... ] -RecPerf ]
 --          command [command-args ... ]
--- 
+--
 -- To get help:
 -- rec-perf +RecPerf -h
 --
@@ -52,7 +52,7 @@ import System.Environment
 import Control.Concurrent
 import Control.Monad (when)
 import System.Exit
-import System.Console.GetOpt	
+import System.Console.GetOpt
 import Data.Char (isDigit)
 import System.Directory
    (findExecutable, getPermissions, executable, doesFileExist)
@@ -64,7 +64,7 @@ main = do
    argv <- getArgs
    let (recPerfArgv, profileeArgv) = grabRecPerfArgv argv
    recPerfOptions <- parseRecPerfOptions recPerfArgv
-   profileCommand recPerfOptions profileeArgv 
+   profileCommand recPerfOptions profileeArgv
 
 profileCommand :: Options -> [String] -> IO ()
 profileCommand _options [] = ioError $ userError ("You did not supply a command to profile")
@@ -72,7 +72,7 @@ profileCommand options (profileeCommand:profileeArgs) = do
    profileePath <- checkProfileeCommand profileeCommand
    -- start a process for the command to be profiled
    profileePID <- forkProcess $ profileeProcess options profileePath profileeArgs
-   -- start a perf process attached to the profileeCommand 
+   -- start a perf process attached to the profileeCommand
    perfPID <- forkProcess $ perfProcess options profileePID
    -- wait for the profilee to terminate
    waitForProcessTerminate profileePID
@@ -80,7 +80,7 @@ profileCommand options (profileeCommand:profileeArgs) = do
    -- perf seems to respect keyboard signal and flush its buffers
    signalProcess keyboardSignal perfPID
    -- wait for perf to terminate
-   -- XXX what if this process ends before the profilee? 
+   -- XXX what if this process ends before the profilee?
    waitForProcessTerminate perfPID
    return ()
 
@@ -99,11 +99,11 @@ checkProfileeCommand profileeCommand = do
                Just profileePath -> return profileePath
       else
          return profileeCommand
-   exists <- doesFileExist profileePath 
+   exists <- doesFileExist profileePath
    if exists
       then do
          -- check if we can execute the command
-         perms <- getPermissions profileePath	
+         perms <- getPermissions profileePath
          if executable perms
             then return profileePath
             else ioError $ userError ("You do not have permission to execute command: " ++ profileePath)
@@ -115,15 +115,15 @@ data Options = Options
    , options_events :: [String]
    , options_dummy :: String
    , options_output :: FilePath
-   , options_help :: Bool 
+   , options_help :: Bool
    } deriving Show
 
 defaultOptions :: Options
 defaultOptions = Options
-   { options_wait = defaultWait 
+   { options_wait = defaultWait
    , options_events = []
    , options_dummy = defaultDummyCommand
-   , options_output = defaultPerfOutputFile 
+   , options_output = defaultPerfOutputFile
    , options_help = False
    }
 
@@ -146,7 +146,7 @@ parseRecPerfOptions argv =
          if options_help options
             then putStrLn usage >> exitSuccess
             else return options
-      (_flags, _unknowns , errs@(_:_)) -> 
+      (_flags, _unknowns , errs@(_:_)) ->
          ioError $ userError (concat errs ++ usage)
 
 usage :: String
@@ -158,7 +158,7 @@ header = "Usage: rec-perf [--RTS] [ +RecPerf [rec-perf-args ... ] -RecPerf ] com
 options :: [OptDescr (Options -> Options)]
 options =
       [ Option
-           "w" ["wait"] 
+           "w" ["wait"]
            (ReqArg (\i opts -> opts { options_wait = safeReadInt "wait" i }) "T")
            ("Time in microseconds to pause profilee to allow perf to attach to it. " ++
            "Defaults to " ++ show defaultWait ++ ".")
@@ -198,7 +198,7 @@ safeReadInt option cs
 -- Cut out all the arguments between +RecPerf -RecPerf from the command
 -- line. Return two lists: 1) everything between the markers, and 2) everything else.
 grabRecPerfArgv :: [String] -> ([String], [String])
-grabRecPerfArgv cmdline = 
+grabRecPerfArgv cmdline =
    (reverse ins, reverse outs)
    where
    (ins, outs) = outside cmdline ([], [])
@@ -230,7 +230,7 @@ waitForProcessTerminate pid = do
 profileeProcess :: Options -> FilePath -> [String] -> IO ()
 profileeProcess options command args = do
    -- wait for a short time to allow perf to start recording this process
-   threadDelay $ options_wait options 
+   threadDelay $ options_wait options
    -- call gettimeofday to synchronise times
    t <- getTimeOfDay
    print t
@@ -253,7 +253,7 @@ perfProcess options pid = do
    -- If no events were specified on the command line then use the defaults
    selectedEvents
       | null optionEvents = mkEventFlags defaultEvents
-      | otherwise = mkEventFlags optionEvents 
+      | otherwise = mkEventFlags optionEvents
       where
       optionEvents = options_events options
    mkEventFlags :: [String] -> [String]
@@ -261,7 +261,7 @@ perfProcess options pid = do
 
 -- Record these events by default unless the user specifies alternatives.
 defaultEvents :: [String]
-defaultEvents = 
+defaultEvents =
    [
     -- scheduler events to record
     "sched:sched_process_exit",
@@ -284,7 +284,7 @@ defaultEvents =
 
     -- system calls to record
     "raw_syscalls:sys_enter",
-    "raw_syscalls:sys_exit", 
+    "raw_syscalls:sys_exit",
     "syscalls:sys_enter_gettimeofday",
     "syscalls:sys_exit_gettimeofday",
     "syscalls:sys_enter_nanosleep",
@@ -294,7 +294,7 @@ defaultEvents =
 -- Given two lists [a, b, c ..] [d, e, f ..]
 -- return a single list by alternating elements from
 -- each: [a, d, b, e, c, f ..] until at least one
--- of the lists is exhausted. 
+-- of the lists is exhausted.
 alternate :: [a] -> [a] -> [a]
 alternate [] _ = []
 alternate _ [] = []
