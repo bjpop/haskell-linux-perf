@@ -12,8 +12,11 @@ compiled with
 
 ghc --make -eventlog -rtsopts -threaded ParFib.hs
 
-Now (after optioally changing the owner or permissions of ParFib.perf.data)
-the perf data can be transformed to a perf eventlog with
+At this point, one can change the owner or permissions of ParFib.perf.data
+and parse and view it with the standard 'perf script' command
+or with our Haskell code, using 'dump-perf'.
+
+The perf data can be transformed to a perf eventlog with
 
 to-eventlog ParFib.perf.data ParFib.perf.eventlog
 
