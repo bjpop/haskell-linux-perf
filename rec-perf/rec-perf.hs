@@ -239,32 +239,62 @@ profileeProcess options command args = do
 -- Attach "perf record" to the profilee process ID.
 perfProcess :: Options -> ProcessID -> IO ()
 perfProcess options pid = do
+   putStrLn (unwords (command ++ args))
    executeFile "perf" True (command ++ args) Nothing
    where
    command = ["record"]
-   args = concat [allCores, output, frequency, attachPID, selectedEvents, dummyCommand]
+   args = concat [allCores, output, frequency, selectedEvents, dummyCommand]
    allCores = ["-a"]
    output = ["-o", options_output options]
    frequency = ["-c", "1"]
-   attachPID = ["-p", show pid]
    dummyCommand = words $ options_dummy options
    -- If no events were specified on the command line then use the defaults
    selectedEvents
-      | null optionEvents = mkEventFlags defaultEvents
-      | otherwise = mkEventFlags optionEvents 
+      -- | null optionEvents = mkEventFlags defaultEvents
+      | null optionEvents = mkSchedFlags scheduler_events
+      -- | otherwise = mkEventFlags optionEvents 
+      | otherwise = mkSchedFlags scheduler_events
       where
       optionEvents = options_events options
+   pidFilter = "pid==" ++ show pid
    mkEventFlags :: [String] -> [String]
    mkEventFlags = alternate (repeat "-e")
+   mkSchedFlags [] = []
+   mkSchedFlags (event:events) =
+      "-e" : event : "--filter" : pidFilter : mkSchedFlags events
 
 -- Record these events by default unless the user specifies alternatives.
+
+scheduler_events :: [String]
+scheduler_events =
+   [
+    -- scheduler events to record
+    "sched:sched_process_exit",               -- pid
+    "sched:sched_kthread_stop",               -- pid
+    -- "sched:sched_kthread_stop_ret",        -- common_pid
+    "sched:sched_wakeup",                     -- pid
+    "sched:sched_wakeup_new",                 -- pid
+    -- "sched:sched_switch",                  -- prev_pid next_pid
+    "sched:sched_migrate_task",               -- pid
+    "sched:sched_process_free",               -- pid
+    "sched:sched_wait_task",                  -- pid
+    "sched:sched_process_wait",               -- pid
+    -- "sched:sched_process_fork",            -- parent_pid child_pid
+    "sched:sched_stat_wait",                  -- pid
+    "sched:sched_stat_sleep",                 -- pid
+    "sched:sched_stat_iowait",                -- pid
+    "sched:sched_stat_runtime",               -- pid
+    "sched:sched_pi_setprio"                  -- pid
+   ]
+
+{-
 defaultEvents :: [String]
 defaultEvents = 
    [
     -- scheduler events to record
     "sched:sched_process_exit",
-    "sched:sched_kthread_stop",
-    "sched:sched_kthread_stop_ret",
+    "sched:sched_kthread_stop",       
+    "sched:sched_kthread_stop_ret",  
     "sched:sched_wakeup",
     "sched:sched_wakeup_new",
     "sched:sched_switch",
@@ -286,6 +316,7 @@ defaultEvents =
     "syscalls:sys_enter_gettimeofday",
     "syscalls:sys_exit_gettimeofday"
    ]
+-}
 
 -- Given two lists [a, b, c ..] [d, e, f ..]
 -- return a single list by alternating elements from
@@ -295,3 +326,293 @@ alternate :: [a] -> [a] -> [a]
 alternate [] _ = []
 alternate _ [] = []
 alternate (x:xs) (y:ys) = x : y : alternate xs ys
+
+{-
+Sched event formats:
+
+You can find this information in the linux filesystem, eg:
+
+/sys/kernel/debug/tracing/events/sched/sched_wakeup_new/format
+
+--------------------
+
+name: sched_kthread_stop
+ID: 55
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+	field:int common_padding;	offset:8;	size:4;	signed:1;
+
+	field:char comm[16];	offset:12;	size:16;	signed:1;
+	field:pid_t pid;	offset:28;	size:4;	signed:1;
+
+print fmt: "comm=%s pid=%d", REC->comm, REC->pid
+
+--------------------
+
+name: sched_kthread_stop_ret
+ID: 54
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+	field:int common_padding;	offset:8;	size:4;	signed:1;
+
+	field:int ret;	offset:12;	size:4;	signed:1;
+
+print fmt: "ret=%d", REC->ret
+
+--------------------
+
+name: sched_migrate_task
+ID: 50
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+	field:int common_padding;	offset:8;	size:4;	signed:1;
+
+	field:char comm[16];	offset:12;	size:16;	signed:1;
+	field:pid_t pid;	offset:28;	size:4;	signed:1;
+	field:int prio;	offset:32;	size:4;	signed:1;
+	field:int orig_cpu;	offset:36;	size:4;	signed:1;
+	field:int dest_cpu;	offset:40;	size:4;	signed:1;
+
+print fmt: "comm=%s pid=%d prio=%d orig_cpu=%d dest_cpu=%d", REC->comm, REC->pid, REC->prio, REC->orig_cpu, REC->dest_cpu
+
+--------------------
+
+name: sched_pi_setprio
+ID: 40
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+	field:int common_padding;	offset:8;	size:4;	signed:1;
+
+	field:char comm[16];	offset:12;	size:16;	signed:1;
+	field:pid_t pid;	offset:28;	size:4;	signed:1;
+	field:int oldprio;	offset:32;	size:4;	signed:1;
+	field:int newprio;	offset:36;	size:4;	signed:1;
+
+print fmt: "comm=%s pid=%d oldprio=%d newprio=%d", REC->comm, REC->pid, REC->oldprio, REC->newprio
+
+--------------------
+
+name: sched_process_exit
+ID: 48
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+	field:int common_padding;	offset:8;	size:4;	signed:1;
+
+	field:char comm[16];	offset:12;	size:16;	signed:1;
+	field:pid_t pid;	offset:28;	size:4;	signed:1;
+	field:int prio;	offset:32;	size:4;	signed:1;
+
+print fmt: "comm=%s pid=%d prio=%d", REC->comm, REC->pid, REC->prio
+
+--------------------
+
+name: sched_process_fork
+ID: 45
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+	field:int common_padding;	offset:8;	size:4;	signed:1;
+
+	field:char parent_comm[16];	offset:12;	size:16;	signed:1;
+	field:pid_t parent_pid;	offset:28;	size:4;	signed:1;
+	field:char child_comm[16];	offset:32;	size:16;	signed:1;
+	field:pid_t child_pid;	offset:48;	size:4;	signed:1;
+
+print fmt: "comm=%s pid=%d child_comm=%s child_pid=%d", REC->parent_comm, REC->parent_pid, REC->child_comm, REC->child_pid
+
+--------------------
+
+name: sched_process_free
+ID: 49
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+	field:int common_padding;	offset:8;	size:4;	signed:1;
+
+	field:char comm[16];	offset:12;	size:16;	signed:1;
+	field:pid_t pid;	offset:28;	size:4;	signed:1;
+	field:int prio;	offset:32;	size:4;	signed:1;
+
+print fmt: "comm=%s pid=%d prio=%d", REC->comm, REC->pid, REC->prio
+
+--------------------
+
+ame: sched_process_wait
+ID: 46
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+	field:int common_padding;	offset:8;	size:4;	signed:1;
+
+	field:char comm[16];	offset:12;	size:16;	signed:1;
+	field:pid_t pid;	offset:28;	size:4;	signed:1;
+	field:int prio;	offset:32;	size:4;	signed:1;
+
+print fmt: "comm=%s pid=%d prio=%d", REC->comm, REC->pid, REC->prio
+
+--------------------
+
+name: sched_stat_iowait
+ID: 42
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+	field:int common_padding;	offset:8;	size:4;	signed:1;
+
+	field:char comm[16];	offset:12;	size:16;	signed:1;
+	field:pid_t pid;	offset:28;	size:4;	signed:1;
+	field:u64 delay;	offset:32;	size:8;	signed:0;
+
+print fmt: "comm=%s pid=%d delay=%Lu [ns]", REC->comm, REC->pid, (unsigned long long)REC->delay
+
+--------------------
+
+name: sched_stat_runtime
+ID: 41
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+	field:int common_padding;	offset:8;	size:4;	signed:1;
+
+	field:char comm[16];	offset:12;	size:16;	signed:1;
+	field:pid_t pid;	offset:28;	size:4;	signed:1;
+	field:u64 runtime;	offset:32;	size:8;	signed:0;
+	field:u64 vruntime;	offset:40;	size:8;	signed:0;
+
+print fmt: "comm=%s pid=%d runtime=%Lu [ns] vruntime=%Lu [ns]", REC->comm, REC->pid, (unsigned long long)REC->runtime, (unsigned long long)REC->vruntime
+
+--------------------
+
+name: sched_stat_sleep
+ID: 43
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+	field:int common_padding;	offset:8;	size:4;	signed:1;
+
+	field:char comm[16];	offset:12;	size:16;	signed:1;
+	field:pid_t pid;	offset:28;	size:4;	signed:1;
+	field:u64 delay;	offset:32;	size:8;	signed:0;
+
+print fmt: "comm=%s pid=%d delay=%Lu [ns]", REC->comm, REC->pid, (unsigned long long)REC->delay
+
+--------------------
+
+name: sched_stat_wait
+ID: 44
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+	field:int common_padding;	offset:8;	size:4;	signed:1;
+
+	field:char comm[16];	offset:12;	size:16;	signed:1;
+	field:pid_t pid;	offset:28;	size:4;	signed:1;
+	field:u64 delay;	offset:32;	size:8;	signed:0;
+
+print fmt: "comm=%s pid=%d delay=%Lu [ns]", REC->comm, REC->pid, (unsigned long long)REC->delay
+
+--------------------
+
+name: sched_switch
+ID: 51
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+	field:int common_padding;	offset:8;	size:4;	signed:1;
+
+	field:char prev_comm[16];	offset:12;	size:16;	signed:1;
+	field:pid_t prev_pid;	offset:28;	size:4;	signed:1;
+	field:int prev_prio;	offset:32;	size:4;	signed:1;
+	field:long prev_state;	offset:40;	size:8;	signed:1;
+	field:char next_comm[16];	offset:48;	size:16;	signed:1;
+	field:pid_t next_pid;	offset:64;	size:4;	signed:1;
+	field:int next_prio;	offset:68;	size:4;	signed:1;
+
+print fmt: "prev_comm=%s prev_pid=%d prev_prio=%d prev_state=%s ==> next_comm=%s next_pid=%d next_prio=%d", REC->prev_comm, REC->prev_pid, REC->prev_prio, REC->prev_state ? __print_flags(REC->prev_state, "|", { 1, "S"} , { 2, "D" }, { 4, "T" }, { 8, "t" }, { 16, "Z" }, { 32, "X" }, { 64, "x" }, { 128, "W" }) : "R", REC->next_comm, REC->next_pid, REC->next_prio
+
+--------------------
+
+name: sched_wait_task
+ID: 47
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+	field:int common_padding;	offset:8;	size:4;	signed:1;
+
+	field:char comm[16];	offset:12;	size:16;	signed:1;
+	field:pid_t pid;	offset:28;	size:4;	signed:1;
+	field:int prio;	offset:32;	size:4;	signed:1;
+
+print fmt: "comm=%s pid=%d prio=%d", REC->comm, REC->pid, REC->prio
+
+--------------------
+
+name: sched_wakeup
+ID: 53
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+	field:int common_padding;	offset:8;	size:4;	signed:1;
+
+	field:char comm[16];	offset:12;	size:16;	signed:1;
+	field:pid_t pid;	offset:28;	size:4;	signed:1;
+	field:int prio;	offset:32;	size:4;	signed:1;
+	field:int success;	offset:36;	size:4;	signed:1;
+	field:int target_cpu;	offset:40;	size:4;	signed:1;
+
+print fmt: "comm=%s pid=%d prio=%d success=%d target_cpu=%03d", REC->comm, REC->pid, REC->prio, REC->success, REC->target_cpu
+
+--------------------
+
+name: sched_wakeup_new
+ID: 52
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+	field:int common_padding;	offset:8;	size:4;	signed:1;
+
+	field:char comm[16];	offset:12;	size:16;	signed:1;
+	field:pid_t pid;	offset:28;	size:4;	signed:1;
+	field:int prio;	offset:32;	size:4;	signed:1;
+	field:int success;	offset:36;	size:4;	signed:1;
+	field:int target_cpu;	offset:40;	size:4;	signed:1;
+
+print fmt: "comm=%s pid=%d prio=%d success=%d target_cpu=%03d", REC->comm, REC->pid, REC->prio, REC->success, REC->target_cpu
+-}
