@@ -167,7 +167,9 @@ perfProcess options program pArgs = do
    args = concat [output, frequency, selectedEvents, profilee]
    output = ["-o", options_output options]
    frequency = ["-c", "1"]
-   profilee = "--" : program : pArgs
+   profilee =
+     "--" : "/bin/bash" : "-c" :
+     [perlHack ++ ";" ++ unwords (program : pArgs)]
    -- If no events were specified on the command line then use the defaults
    selectedEvents
       | null optionEvents = mkEventFlags defaultEvents
@@ -178,11 +180,11 @@ perfProcess options program pArgs = do
    mkEventFlags = alternate (repeat "-e")
    -- Make a syscall to synchronise times.
    -- TODO: move nanosleep to a separate program (in C?) that then runs
-   -- the profiled command? Then it will be registered by perf record.
-   -- Or find an easy way to call bash from perf and nanosleep from bash
-   -- (the hacky "perl -MTime::HiRes -e 'Time::HiRes::nanosleep 3'"
+   -- the profiled command? Then it would be registered by perf record.
+   -- Or find an easy way to call nanosleep from bash
+   -- (the current "perl -MTime::HiRes -e 'Time::HiRes::nanosleep 3'"
    -- or an equivalnt ghci have huge overheads, which distort measurements).
-   _perlHack = "perl -MTime::HiRes -e 'Time::HiRes::nanosleep 3'"
+   perlHack = "perl -MTime::HiRes -e 'Time::HiRes::nanosleep 3'"
 
 -- Record these events by default unless the user specifies alternatives.
 defaultEvents :: [String]
