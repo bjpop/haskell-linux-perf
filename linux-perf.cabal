@@ -29,7 +29,7 @@ Description:
     1. Recording events.
  .
     2. Displaying events.
- . 
+ .
  The @perf record@ command records information about performance events in a file called (by default) @perf.data@.
  It is a binary file format which is basically a memory dump of the data structures used to record event
  information. The file has two main parts:
@@ -125,6 +125,8 @@ Executable rec-perf {
                  filepath>=1.2
   other-modules: GetTimeOfDay
   ghc-options:   -rtsopts
+  ghc-options:   -Wall -fwarn-orphans -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -fwarn-monomorphism-restriction -fwarn-unrecognised-pragmas
+  ghc-options:   -fno-warn-auto-orphans -fno-warn-implicit-prelude
 }
 
 Executable to-eventlog {

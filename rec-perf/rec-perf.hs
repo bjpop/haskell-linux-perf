@@ -8,21 +8,10 @@
 --
 -- A program to "perf record" a trace of another command.
 --
--- The linux performance counter tool "perf" can attach to a running process
--- and record events for just that PID. This program automates that activity
--- for a given command, which we will call the profilee. First it forks a
--- process for the profilee, then it forks another process which attaches
--- "perf record" onto the PID of the profilee. It then waits for the
--- profilee to terminate, and then terminates the perf process. Note that
--- the profilee process sleeps for a short time before running the desired
--- command. This gives the perf process time to start up and capture all the
--- events in the profilee (otherwise we would have a condition where
--- the profilee could start or even terminate before perf had begun
--- recording events). Also note that when "perf record" is used in PID mode
--- it requires another dummy command which it uses to decide when to stop
--- recording - that is, when the dummy process ends so does the perf process.
--- We use the unix "sleep" command as the dummy process. Currently it is set
--- to run for 60 seconds, but we should make it a parameter to rec-perf.
+-- The linux performance counter tool "perf" can record events
+-- for a given command. This program runs "perf" adding our default set
+-- of options. In particular, it specifies our default set
+-- of events to be recorded.
 --
 -- Usage:
 -- rec-perf [--RTS]
@@ -35,22 +24,12 @@
 -- The --RTS is to stop ghc from grabbing any +RTS ... -RTS commands from
 -- the command line.
 --
--- TODO:
---    - decide what to do if we are waiting for a process and it stops
---      instead of terminates/exits.
---    - decide what to do if perf terminates before the profilee
---
 -----------------------------------------------------------------------------
 
 module Main where
 
-import System.Posix.Types
-import System.Posix.Unistd
 import System.Posix.Process
-import System.Posix.Signals
 import System.Environment
-import Control.Concurrent
-import Control.Monad (when)
 import System.Exit
 import System.Console.GetOpt
 import Data.Char (isDigit)
@@ -70,24 +49,16 @@ profileCommand :: Options -> [String] -> IO ()
 profileCommand _options [] = ioError $ userError ("You did not supply a command to profile")
 profileCommand options (profileeCommand:profileeArgs) = do
    profileePath <- checkProfileeCommand profileeCommand
-   -- start a process for the command to be profiled
-   profileePID <- forkProcess $ profileeProcess options profileePath profileeArgs
-   -- start a perf process attached to the profileeCommand
-   perfPID <- forkProcess $ perfProcess options profileePID
-   -- wait for the profilee to terminate
-   waitForProcessTerminate profileePID
-   -- terminate the perf process
-   -- perf seems to respect keyboard signal and flush its buffers
-   signalProcess keyboardSignal perfPID
-   -- wait for perf to terminate
-   -- XXX what if this process ends before the profilee?
-   waitForProcessTerminate perfPID
-   return ()
+   -- debug
+   t <- getTimeOfDay
+   print t
+   -- run perf record with the profilee command
+   perfProcess options profileePath profileeArgs
 
 -- Check if the profilee command exists and is executable.
 checkProfileeCommand :: FilePath -> IO FilePath
 checkProfileeCommand profileeCommand = do
-   let (profileeCommandDir, profileeCommandFile) = splitFileName profileeCommand
+   let (profileeCommandDir, _profileeCommandFile) = splitFileName profileeCommand
    profileePath <-
       if null profileeCommandDir
          -- profilee command was not prefixed with a directory path
@@ -111,28 +82,17 @@ checkProfileeCommand profileeCommand = do
 
 -- Options for rec-perf itself, some of which are passed on to "perf record"
 data Options = Options
-   { options_wait :: Int
-   , options_events :: [String]
-   , options_dummy :: String
+   { options_events :: [String]
    , options_output :: FilePath
    , options_help :: Bool
    } deriving Show
 
 defaultOptions :: Options
 defaultOptions = Options
-   { options_wait = defaultWait
-   , options_events = []
-   , options_dummy = defaultDummyCommand
+   { options_events = []
    , options_output = defaultPerfOutputFile
    , options_help = False
    }
-
-defaultDummyCommand :: String
-defaultDummyCommand = "sleep 60"
-
--- half a second
-defaultWait :: Int
-defaultWait = 500000
 
 defaultPerfOutputFile :: FilePath
 defaultPerfOutputFile = "perf.data"
@@ -141,7 +101,7 @@ defaultPerfOutputFile = "perf.data"
 parseRecPerfOptions :: [String] -> IO Options
 parseRecPerfOptions argv =
    case getOpt Permute options argv of
-      (foundOptions, _unknowns, errors@[]) -> do
+      (foundOptions, _unknowns, _errors@[]) -> do
          let options = foldl (flip id) defaultOptions foundOptions
          if options_help options
             then putStrLn usage >> exitSuccess
@@ -158,21 +118,9 @@ header = "Usage: rec-perf [--RTS] [ +RecPerf [rec-perf-args ... ] -RecPerf ] com
 options :: [OptDescr (Options -> Options)]
 options =
       [ Option
-           "w" ["wait"]
-           (ReqArg (\i opts -> opts { options_wait = safeReadInt "wait" i }) "T")
-           ("Time in microseconds to pause profilee to allow perf to attach to it. " ++
-           "Defaults to " ++ show defaultWait ++ ".")
-
-      , Option
            "e" ["event"]
            (ReqArg (\e opts -> opts { options_events = e : options_events opts }) "E")
            "Event to trace, instead of default events. Can be specified multiple times."
-
-      , Option
-           "d" ["dummy"]
-           (ReqArg (\s opts -> opts { options_dummy = s }) "C")
-           ("Dummy command to control how long perf-record runs for. " ++
-           "Defaults to " ++ show defaultDummyCommand ++ ".")
 
       , Option
            "h" ["help"]
@@ -210,46 +158,16 @@ grabRecPerfArgv cmdline =
    inside ("-RecPerf":rest) acc = outside rest acc
    inside (str:rest) (ins, outs) = inside rest (str:ins, outs)
 
--- Block the parent process by waiting for a child to terminate.
-waitForProcessTerminate :: ProcessID -> IO ()
-waitForProcessTerminate pid = do
-   processStatus <- getProcessStatus
-                       True -- block this process and wait
-                       True -- XXX what is this for?
-                       pid
-   case processStatus of
-      -- no status available for the process, try to kill it instead. XXX is this necessary?
-      Nothing -> signalProcess killProcess pid
-      Just (Exited code) -> return ()
-      Just (Terminated signal) -> return ()
-      Just (Stopped signal) ->
-         -- XXX what to do here?
-         return ()
-
--- Run the profilee process after a short wait to allow perf to attach to the process ID.
-profileeProcess :: Options -> FilePath -> [String] -> IO ()
-profileeProcess options command args = do
-   -- wait for a short time to allow perf to start recording this process
-   threadDelay $ options_wait options
-   -- call gettimeofday to synchronise times
-   t <- getTimeOfDay
-   print t
-   nanosleep 3
-   -- run the command to be profiled
-   executeFile command True args Nothing
-
 -- Attach "perf record" to the profilee process ID.
-perfProcess :: Options -> ProcessID -> IO ()
-perfProcess options pid = do
+perfProcess :: Options -> FilePath -> [String] -> IO ()
+perfProcess options program pArgs = do
    executeFile "perf" True (command ++ args) Nothing
    where
    command = ["record"]
-   args = concat [allCores, output, frequency, attachPID, selectedEvents, dummyCommand]
-   allCores = ["-a"]
+   args = concat [output, frequency, selectedEvents, profilee]
    output = ["-o", options_output options]
    frequency = ["-c", "1"]
-   attachPID = ["-p", show pid]
-   dummyCommand = words $ options_dummy options
+   profilee = "--" : program : pArgs
    -- If no events were specified on the command line then use the defaults
    selectedEvents
       | null optionEvents = mkEventFlags defaultEvents
@@ -258,6 +176,13 @@ perfProcess options pid = do
       optionEvents = options_events options
    mkEventFlags :: [String] -> [String]
    mkEventFlags = alternate (repeat "-e")
+   -- Make a syscall to synchronise times.
+   -- TODO: move nanosleep to a separate program (in C?) that then runs
+   -- the profiled command? Then it will be registered by perf record.
+   -- Or find an easy way to call bash from perf and nanosleep from bash
+   -- (the hacky "perl -MTime::HiRes -e 'Time::HiRes::nanosleep 3'"
+   -- or an equivalnt ghci have huge overheads, which distort measurements).
+   _perlHack = "perl -MTime::HiRes -e 'Time::HiRes::nanosleep 3'"
 
 -- Record these events by default unless the user specifies alternatives.
 defaultEvents :: [String]
