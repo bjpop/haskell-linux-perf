@@ -140,6 +140,16 @@ Executable to-eventlog {
   ghc-options:   -rtsopts
 }
 
+Executable to-eventlog-script {
+  Main-is: to-eventlog-script.hs
+  hs-source-dirs: to-eventlog
+  Build-depends: base==4.*,
+                 ghc-events==0.4.1.*,
+                 containers==0.4.*,
+                 process==1.1.*
+  ghc-options:   -rtsopts
+}
+
 Executable sleep_run {
   -- The sleep_run.hs is a dummy Haskell file.
   -- The real program is in sleep_run.c
