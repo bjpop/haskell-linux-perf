@@ -139,3 +139,13 @@ Executable to-eventlog {
                  bytestring==0.9.*
   ghc-options:   -rtsopts
 }
+
+Executable sleep_run {
+  -- The sleep_run.hs is a dummy Haskell file.
+  -- The real program is in sleep_run.c
+  Main-is: sleep_run.hs
+  hs-source-dirs: sleep_run 
+  Build-depends: base==4.*
+  ghc-options: -no-hs-main  
+  c-sources: sleep_run/sleep_run.c
+}

@@ -167,9 +167,12 @@ perfProcess options program pArgs = do
    args = concat [output, frequency, selectedEvents, profilee]
    output = ["-o", options_output options]
    frequency = ["-c", "1"]
-   profilee =
+   -- profilee = "/home/bjpop/.cabal/bin/sleep_run" : (program : pArgs)
+   profilee = "sleep_run" : (program : pArgs)
+{-
      "--" : "/bin/bash" : "-c" :
      [perlHack ++ ";" ++ unwords (program : pArgs)]
+-}
    -- If no events were specified on the command line then use the defaults
    selectedEvents
       | null optionEvents = mkEventFlags defaultEvents
@@ -184,7 +187,7 @@ perfProcess options program pArgs = do
    -- Or find an easy way to call nanosleep from bash
    -- (the current "perl -MTime::HiRes -e 'Time::HiRes::nanosleep 3'"
    -- or an equivalnt ghci have huge overheads, which distort measurements).
-   perlHack = "perl -MTime::HiRes -e 'Time::HiRes::nanosleep 3'"
+   -- perlHack = "perl -MTime::HiRes -e 'Time::HiRes::nanosleep 3'"
 
 -- Record these events by default unless the user specifies alternatives.
 defaultEvents :: [String]
