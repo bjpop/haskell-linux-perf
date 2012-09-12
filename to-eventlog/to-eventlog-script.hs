@@ -1,3 +1,4 @@
+{-# LANGUAGE PatternGuards #-}
 -----------------------------------------------------------------------------
 -- |
 -- Copyright   : (c) 2010,2011,2012 Simon Marlow, Bernie Pope, Mikolaj Konarski
@@ -13,7 +14,7 @@
 -- For example if the profiled command is called "Fac", and the perf data
 -- is in a file called perf.data, we can generate a ghc log file like so:
 --
---    to-eventlog-script Fac perf.data ghc.data 
+--    to-eventlog-script Fac perf.data ghc.data
 --
 -----------------------------------------------------------------------------
 
@@ -21,7 +22,7 @@ import qualified GHC.RTS.Events as GHC
 import Data.Map as Map hiding (mapMaybe, map, filter, null)
 import Data.List as List (foldl')
 import Data.Word (Word64, Word32, Word16)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, mapMaybe)
 import System.Exit (exitWith, ExitCode (ExitFailure))
 import System.Environment (getArgs)
 import System.IO (hPutStrLn, stderr)
@@ -42,11 +43,11 @@ main = do
          procOut <- createProcess (shell $ perfScriptCmd inFile)
                        { std_out = CreatePipe }
          case procOut of
-            (_, Just hout, _, _) -> do 
+            (_, Just hout, _, _) -> do
                -- read the stdout of perf script
                contents <- hGetContents hout
                -- parse the perf events
-               let perfEvents = map parsePerfLine $ lines contents
+               let perfEvents = mapMaybe parsePerfLine $ lines contents
                -- grab the start time of the first event for the command
                -- of interest
                    startTime = getStartTime command perfEvents
@@ -71,7 +72,7 @@ getStartTime command (event:rest)
    thisCommand = perfEvent_command event
 
 data PerfEvent =
-   PerfEvent  
+   PerfEvent
    { perfEvent_command :: !String
    , perfEvent_threadID :: !Word64
    , perfEvent_processID :: !Word64
@@ -83,20 +84,22 @@ data PerfEvent =
    deriving (Eq, Show)
 
 -- XXX this is a bit hacky, more error checking is desirable
-parsePerfLine :: String -> PerfEvent
-parsePerfLine string =
-   PerfEvent comm tid pid time cpu event trace
-   where
-   comm:ids:cpu:timeStr:eventStr:rest = words string
-   event = init eventStr
-   trace = unwords rest
-   (pidStr, _:tidStr) = break (== '/') ids
-   (topTime, _:botTime) = break (== '.') timeStr
-   time :: Word64
-   time = safeReadInt (topTime ++ init botTime)
-   pid, tid :: Word64
-   pid = safeReadInt pidStr
-   tid = safeReadInt tidStr
+parsePerfLine :: String -> Maybe PerfEvent
+parsePerfLine string
+  | comm:ids:cpu:timeStr:eventStr:rest <- words string
+  , (pidStr, _:tidStr) <- break (== '/') ids
+  , (topTime, _:botTime) <- break (== '.') timeStr =
+    let event = init eventStr
+        trace = unwords rest
+        -- Time resolution is 1000 lower than in Haskell eventlogs
+        -- and in the raw, binary perf events format.
+        time :: Word64
+        time = 1000 * safeReadInt (topTime ++ init botTime)
+        pid, tid :: Word64
+        pid = safeReadInt pidStr
+        tid = safeReadInt tidStr
+    in Just $ PerfEvent comm tid pid time cpu event trace
+parsePerfLine _ = Nothing
 
 -- XXX icky hack to handle bad input
 -- FIXME
@@ -125,7 +128,7 @@ perfToGHC mstart perfEvents =
    where
    start = fromMaybe 0 mstart
    typeEvents :: [GHC.Event]
-   typeEvents = mkTypeEvents $ Map.toList typeMap 
+   typeEvents = mkTypeEvents $ Map.toList typeMap
    -- we fold over the list of perf events and collect a set of
    -- event types and a list of ghc events
    (typeMap, ghcEvents, _typeID) = List.foldl' perfToGHCWorker (Map.empty, [], 0) perfEvents
@@ -140,7 +143,7 @@ perfToGHC mstart perfEvents =
    perfToGHCWorker :: EventState -> PerfEvent -> EventState
    perfToGHCWorker state@(typeMap, events, typeID) event
       -- only consider events after the start
-      | eventTime >= start = (newTypeMap, newEvent:events, newTypeID) 
+      | eventTime >= start = (newTypeMap, newEvent:events, newTypeID)
       | otherwise = state
       where
       eventTime = perfEvent_time event
@@ -157,7 +160,7 @@ perfToGHC mstart perfEvents =
             -- We have seen this event before, return its typeID and
             -- do not update the typeMap or the type ID counter
             Just thisTypeID -> (typeMap, thisTypeID, typeID)
-      ghcTID = GHC.KernelThreadId $ perfEvent_threadID event 
+      ghcTID = GHC.KernelThreadId $ perfEvent_threadID event
       -- generate the appropriate ghc event
       newEvent = GHC.Event relativeTime newEventBody
       newEventBody = GHC.PerfTracepoint ghcTypeID ghcTID
