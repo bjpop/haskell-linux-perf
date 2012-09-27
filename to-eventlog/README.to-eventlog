@@ -13,12 +13,12 @@ compiled with
 ghc --make -eventlog -rtsopts -threaded ParFib.hs
 
 At this point, one can change the owner or permissions of ParFib.perf.data
-and parse and view it with the standard 'perf script' command
-or with our Haskell code, using 'dump-perf'.
+and parse and view it with the standard 'perf script' command or with
+the 'dump-perf' tool that uses our Haskell library for parsing perf data.
 
 The perf data can be transformed to a perf eventlog with
 
-to-eventlog ParFib.perf.data ParFib.perf.eventlog
+to-eventlog-script ParFib ParFib.perf.data ParFib.perf.eventlog +RTS -K300M
 
 The eventlog can be viewed with
 
@@ -28,8 +28,9 @@ the two eventlogs can be merged with
 
 ghc-events merge ParFib.all.eventlog ParFib.eventlog ParFib.perf.eventlog
 
-and the resulting big eventlog is best viewed in ThreadScope with
+and the resulting big eventlog is best viewed in ThreadScope
 
 threadscope ParFib.all.eventlog
 
-in the Instant Events tab, with the Event Labels on.
+in the Timeline main pane, with Instant Events selected in the Traces tab
+and with the View/Event_Labels option on.
