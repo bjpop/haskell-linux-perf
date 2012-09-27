@@ -36,7 +36,6 @@ import Data.Char (isDigit)
 import System.Directory
    (findExecutable, getPermissions, executable, doesFileExist)
 import System.FilePath (splitFileName)
-import GetTimeOfDay (getTimeOfDay)
 
 main :: IO ()
 main = do
@@ -49,9 +48,6 @@ profileCommand :: Options -> [String] -> IO ()
 profileCommand _options [] = ioError $ userError ("You did not supply a command to profile")
 profileCommand options (profileeCommand:profileeArgs) = do
    profileePath <- checkProfileeCommand profileeCommand
-   -- debug
-   t <- getTimeOfDay
-   print t
    -- run perf record with the profilee command
    perfProcess options profileePath profileeArgs
 
@@ -203,9 +199,7 @@ defaultEvents =
 
     -- system calls to record
     "raw_syscalls:sys_enter",
-    "raw_syscalls:sys_exit",
-    "syscalls:sys_enter_gettimeofday",
-    "syscalls:sys_exit_gettimeofday"
+    "raw_syscalls:sys_exit"
    ]
 
 -- Given two lists [a, b, c ..] [d, e, f ..]

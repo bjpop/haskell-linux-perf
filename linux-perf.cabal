@@ -123,7 +123,6 @@ Executable rec-perf {
                  unix==2.5.*,
                  directory==1.1.*,
                  filepath>=1.2
-  other-modules: GetTimeOfDay
   ghc-options:   -rtsopts
   ghc-options:   -Wall -fwarn-orphans -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -fwarn-monomorphism-restriction -fwarn-unrecognised-pragmas
   ghc-options:   -fno-warn-auto-orphans -fno-warn-implicit-prelude
