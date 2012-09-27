@@ -79,6 +79,7 @@ checkProfileeCommand profileeCommand = do
 -- Options for rec-perf itself, some of which are passed on to "perf record"
 data Options = Options
    { options_events :: [String]
+   , options_mmap :: String
    , options_output :: FilePath
    , options_help :: Bool
    } deriving Show
@@ -86,6 +87,7 @@ data Options = Options
 defaultOptions :: Options
 defaultOptions = Options
    { options_events = []
+   , options_mmap = ""
    , options_output = defaultPerfOutputFile
    , options_help = False
    }
@@ -128,6 +130,11 @@ options =
            (ReqArg (\f opts -> opts { options_output = f }) "OUT")
            ("Output file to store perf record data. " ++
            "Defaults to " ++ show defaultPerfOutputFile ++ ".")
+      , Option
+           "m" ["mmap-pages"]
+           (ReqArg (\mm opts -> opts {options_mmap = mm }) "MM")
+           ("Number of mmap data pages. " ++
+           "Defaults to " ++ defaultMmap ++ ".")
       ]
 
 -- Check that a string can be safely intepreted as an integer,
@@ -161,7 +168,8 @@ perfProcess options program pArgs = do
    executeFile "perf" True (command ++ args) Nothing
    where
    command = ["record"]
-   args = concat [output, frequency, moreTimestamps, selectedEvents, profilee]
+   args =
+     concat [output, frequency, moreTimestamps, mmap, selectedEvents, profilee]
    output = ["-o", options_output options]
    frequency = ["-c", "1"]
    moreTimestamps = ["--timestamp"]
@@ -172,8 +180,21 @@ perfProcess options program pArgs = do
       | otherwise = mkEventFlags optionEvents
       where
       optionEvents = options_events options
+   selectedMmap
+      | null optionMmap = defaultMmap
+      | otherwise = optionMmap
+      where
+      optionMmap = options_mmap options
+   mmap = ["--mmap-pages", selectedMmap]
    mkEventFlags :: [String] -> [String]
    mkEventFlags = alternate (repeat "-e")
+
+-- The default value of the mmap-pages setting.
+-- That's an order of magnitude too little to avoid IO/CPU overload
+-- with the current demo setup, but that's the highest permitted value,
+-- unless rec-perf is run as root. Can be overwritten by the user.
+defaultMmap :: String
+defaultMmap = "128"
 
 -- Record these events by default unless the user specifies alternatives.
 defaultEvents :: [String]
