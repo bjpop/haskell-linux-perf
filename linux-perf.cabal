@@ -129,17 +129,6 @@ Executable rec-perf {
   ghc-options:   -fno-warn-auto-orphans -fno-warn-implicit-prelude
 }
 
-Executable to-eventlog {
-  Main-is: to-eventlog.hs
-  hs-source-dirs: to-eventlog
-  Build-depends: linux-perf==0.2,
-                 base==4.*,
-                 ghc-events==0.4.1.*,
-                 containers==0.4.*,
-                 bytestring==0.9.*
-  ghc-options:   -rtsopts
-}
-
 Executable to-eventlog-script {
   Main-is: to-eventlog-script.hs
   hs-source-dirs: to-eventlog
