@@ -213,10 +213,10 @@ defaultEvents =
     "sched:sched_wait_task",
     "sched:sched_process_wait",
     "sched:sched_process_fork",
-    "sched:sched_stat_wait",
-    "sched:sched_stat_sleep",
+--    "sched:sched_stat_wait",
+--    "sched:sched_stat_sleep",
     "sched:sched_stat_iowait",
-    "sched:sched_stat_runtime",
+--    "sched:sched_stat_runtime",
     "sched:sched_pi_setprio",
 
     -- system calls to record
