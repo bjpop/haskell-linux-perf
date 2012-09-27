@@ -161,9 +161,10 @@ perfProcess options program pArgs = do
    executeFile "perf" True (command ++ args) Nothing
    where
    command = ["record"]
-   args = concat [output, frequency, selectedEvents, profilee]
+   args = concat [output, frequency, moreTimestamps, selectedEvents, profilee]
    output = ["-o", options_output options]
    frequency = ["-c", "1"]
+   moreTimestamps = ["--timestamp"]
    profilee = program : pArgs
    -- If no events were specified on the command line then use the defaults
    selectedEvents
