@@ -1,4 +1,4 @@
-{-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE PatternGuards, BangPatterns #-}
 -----------------------------------------------------------------------------
 -- |
 -- Copyright   : (c) 2010,2011,2012 Simon Marlow, Bernie Pope, Mikolaj Konarski
@@ -139,9 +139,10 @@ perfToGHC mstart perfEvents =
    -- extract a new type event and ghc event from the next perf event
    -- and update the state
 
+   -- We need (some of) these bangs to avoid stack overflows.
    -- XXX a state monad would be nicer
    perfToGHCWorker :: EventState -> PerfEvent -> EventState
-   perfToGHCWorker state@(typeMap, events, typeID) event
+   perfToGHCWorker state@(!typeMap, !events, !typeID) !event
       -- only consider events after the start
       | eventTime >= start = (newTypeMap, newEvent:events, newTypeID)
       | otherwise = state
@@ -151,7 +152,6 @@ perfToGHC mstart perfEvents =
       eventName = perfEvent_event event
       (newTypeMap, ghcTypeID, newTypeID) =
          case Map.lookup eventName typeMap of
-            -- XXX probably need a strict Map insert
             -- We've not seen this event name before, allocate
             -- a new event ID for it and insert it into the type map
             Nothing -> let nextTypeID  = typeID + 1
