@@ -98,7 +98,7 @@ defaultPerfOutputFile = "perf.data"
 -- parse the command line arguments that appeared between +RefPerf and -RecPerf
 parseRecPerfOptions :: [String] -> IO Options
 parseRecPerfOptions argv =
-   case getOpt Permute options argv of
+   case getOpt Permute recOptions argv of
       (foundOptions, _unknowns, _errors@[]) -> do
          let options = foldl (flip id) defaultOptions foundOptions
          if options_help options
@@ -108,13 +108,13 @@ parseRecPerfOptions argv =
          ioError $ userError (concat errs ++ usage)
 
 usage :: String
-usage = usageInfo header options
+usage = usageInfo header recOptions
 
 header :: String
 header = "Usage: rec-perf [--RTS] [ +RecPerf [rec-perf-args ... ] -RecPerf ] command [command-args ... ]"
 
-options :: [OptDescr (Options -> Options)]
-options =
+recOptions :: [OptDescr (Options -> Options)]
+recOptions =
       [ Option
            "e" ["event"]
            (ReqArg (\e opts -> opts { options_events = e : options_events opts }) "E")
@@ -151,9 +151,9 @@ safeReadInt option cs
 -- and 2) everything else.
 grabRecPerfArgv :: [String] -> ([String], [String])
 grabRecPerfArgv cmdline =
-   (reverse ins, reverse outs)
+   (reverse cmdIns, reverse cmdOuts)
    where
-   (ins, outs) = outside cmdline ([], [])
+   (cmdIns, cmdOuts) = outside cmdline ([], [])
    outside, inside :: [String] -> ([String], [String]) -> ([String], [String])
    outside [] acc = acc
    outside ("+RecPerf":rest) acc = inside rest acc

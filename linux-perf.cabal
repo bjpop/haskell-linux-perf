@@ -136,4 +136,6 @@ Executable to-eventlog-script {
                  containers >= 0.4 && < 0.6,
                  process==1.1.*
   ghc-options:   -rtsopts
+  ghc-options:   -Wall -fwarn-orphans -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -fwarn-monomorphism-restriction -fwarn-unrecognised-pragmas
+  ghc-options:   -fno-warn-auto-orphans -fno-warn-implicit-prelude
 }

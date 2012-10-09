@@ -21,14 +21,13 @@
 import qualified GHC.RTS.Events as GHC
 import Data.Map as Map hiding (mapMaybe, map, filter, null)
 import Data.List as List (foldl')
-import Data.Word (Word64, Word32, Word16)
+import Data.Word (Word64, Word32)
 import Data.Maybe (fromMaybe, mapMaybe)
 import System.Exit (exitWith, ExitCode (ExitFailure))
 import System.Environment (getArgs)
-import System.IO (hPutStrLn, stderr)
+import System.IO (hPutStrLn, stderr, hGetContents)
 import Data.Char (isDigit)
 import System.Process
-import System.IO
 
 -- Select specific fields for perf script to display
 perfScriptCmd :: String -> String
@@ -57,6 +56,7 @@ main = do
                print startTime
                -- write the ghc log to a file
                GHC.writeEventLogToFile outFile perfEventlog
+            _ -> die "Internal error: shell process creation failed"
       _other -> die "Syntax: to-eventlog-script command [perf_file eventlog_file]"
 
 -- exit the program with an error message
@@ -64,8 +64,8 @@ die :: String -> IO a
 die s = hPutStrLn stderr s >> exitWith (ExitFailure 1)
 
 getStartTime :: String -> [PerfEvent] -> Maybe Word64
-getStartTime command [] = Nothing
-getStartTime command (event:rest)
+getStartTime _command [] = Nothing
+getStartTime  command (event:rest)
    | command == thisCommand = Just $ perfEvent_time event
    | otherwise = getStartTime command rest
    where
@@ -75,11 +75,11 @@ data PerfEvent =
    PerfEvent
    { perfEvent_command :: !String
    , perfEvent_threadID :: !Word64
-   , perfEvent_processID :: !Word64
+   , _perfEvent_processID :: !Word64
    , perfEvent_time :: !Word64
-   , perfEvent_CPU :: !String
+   , _perfEvent_CPU :: !String
    , perfEvent_event :: !String
-   , perfEvent_trace :: !String
+   , _perfEvent_trace :: !String
    }
    deriving (Eq, Show)
 
@@ -114,8 +114,8 @@ perfToEventlog mstart events =
    eventLog $ perfToGHC mstart events
    where
    eventLog :: [GHC.Event] -> GHC.EventLog
-   eventLog events = GHC.EventLog (GHC.Header perfEventlogHeader)
-                                  (GHC.Data events)
+   eventLog evs = GHC.EventLog (GHC.Header perfEventlogHeader)
+                               (GHC.Data evs)
 
 type TypeMap = Map String Word32
 type EventState = (TypeMap, [GHC.Event], Word32)
@@ -128,13 +128,13 @@ perfToGHC mstart perfEvents =
    where
    start = fromMaybe 0 mstart
    typeEvents :: [GHC.Event]
-   typeEvents = mkTypeEvents $ Map.toList typeMap
+   typeEvents = mkTypeEvents $ Map.toList fullTypeMap
    -- we fold over the list of perf events and collect a set of
    -- event types and a list of ghc events
-   (typeMap, ghcEvents, _typeID) = List.foldl' perfToGHCWorker (Map.empty, [], 0) perfEvents
+   (fullTypeMap, ghcEvents, _typeID) = List.foldl' perfToGHCWorker (Map.empty, [], 0) perfEvents
    -- convert the set of perf type infos into a list of events
    mkTypeEvents :: [(String, Word32)] -> [GHC.Event]
-   mkTypeEvents = map (\(name, id) -> GHC.Event 0 $ GHC.PerfName id name)
+   mkTypeEvents = map (\(name, ident) -> GHC.Event 0 $ GHC.PerfName ident name)
 
    -- extract a new type event and ghc event from the next perf event
    -- and update the state
