@@ -7,14 +7,13 @@
 -- Stability   : experimental
 -- Portability : ghc
 --
--- Convert linux perf data into a GHC event log, using the output from
+-- Convert linux perf data into a GHC eventlog, using the output from
 -- perf script. You need to specify the name of the command that was
--- profiled as the first argument:
---
+-- profiled as the first argument.
 -- For example if the profiled command is called "Fac", and the perf data
 -- is in a file called perf.data, we can generate a ghc log file like so:
 --
---    to-eventlog-script Fac perf.data ghc.data
+--    to-eventlog-script Fac perf.data Fac.perf.eventlog
 --
 -----------------------------------------------------------------------------
 
@@ -29,7 +28,9 @@ import System.IO (hPutStrLn, stderr, hGetContents)
 import Data.Char (isDigit)
 import System.Process
 
--- Select specific fields for perf script to display
+-- Select specific fields for perf script to display.
+-- TODO: also specify different fields for software counters. This is
+-- difficult due to perf script bugs.
 perfScriptCmd :: String -> String
 perfScriptCmd inFile =
    "perf script -f comm,tid,pid,time,cpu,event,trace -i " ++ inFile
@@ -50,11 +51,11 @@ main = do
                -- grab the start time of the first event for the command
                -- of interest
                    startTime = getStartTime command perfEvents
-               -- convert the perf events into a GHC log
+               -- convert the perf events into a GHC eventlog
                    perfEventlog = perfToEventlog startTime perfEvents
-               -- print the start time
+               -- debug: print the start time
                print startTime
-               -- write the ghc log to a file
+               -- write the ghc eventlog to a file
                GHC.writeEventLogToFile outFile perfEventlog
             _ -> die "Internal error: shell process creation failed"
       _other -> die "Syntax: to-eventlog-script command [perf_file eventlog_file]"
@@ -92,7 +93,8 @@ parsePerfLine string
     let event = init eventStr
         trace = unwords rest
         -- Time resolution is 1000 lower than in Haskell eventlogs
-        -- and in the raw, binary perf events format.
+        -- and in the raw, binary perf events format,
+        -- hence we multiply by 1000.
         time :: Word64
         time = 1000 * safeReadInt (topTime ++ init botTime)
         pid, tid :: Word64
@@ -108,7 +110,7 @@ safeReadInt string
    | all isDigit string = read string
    | otherwise = -1
 
--- Convert linux perf event data into a ghc event log.
+-- Convert linux perf event data into a ghc eventlog.
 perfToEventlog :: Maybe Word64 -> [PerfEvent] -> GHC.EventLog
 perfToEventlog mstart events =
    eventLog $ perfToGHC mstart events
@@ -122,7 +124,7 @@ type EventState = (TypeMap, [GHC.Event], Word32)
 
 perfToGHC :: Maybe Word64   -- initial timestamp
           -> [PerfEvent]    -- perf events in sorted time order
-          -> [GHC.Event]    -- ghc event log
+          -> [GHC.Event]    -- ghc eventlog
 perfToGHC mstart perfEvents =
    typeEvents ++ reverse ghcEvents
    where
@@ -136,14 +138,13 @@ perfToGHC mstart perfEvents =
    mkTypeEvents :: [(String, Word32)] -> [GHC.Event]
    mkTypeEvents = map (\(name, ident) -> GHC.Event 0 $ GHC.PerfName ident name)
 
-   -- extract a new type event and ghc event from the next perf event
-   -- and update the state
-
-   -- We need (some of) these bangs to avoid stack overflows.
+   -- Extract a new type event and ghc event from the next perf event
+   -- and update the state.
+   -- Note: we need (some of) these bangs to avoid stack overflows.
    -- XXX a state monad would be nicer
    perfToGHCWorker :: EventState -> PerfEvent -> EventState
    perfToGHCWorker state@(!typeMap, !events, !typeID) !event
-      -- only consider events after the start
+      -- only consider events after the program start time
       | eventTime >= start = (newTypeMap, newEvent:events, newTypeID)
       | otherwise = state
       where
@@ -153,12 +154,12 @@ perfToGHC mstart perfEvents =
       (newTypeMap, ghcTypeID, newTypeID) =
          case Map.lookup eventName typeMap of
             -- We've not seen this event name before, allocate
-            -- a new event ID for it and insert it into the type map
+            -- a new event ID for it and insert it into the type map.
             Nothing -> let nextTypeID  = typeID + 1
                            nextTypeMap = Map.insert eventName nextTypeID typeMap
                        in (nextTypeMap, nextTypeID, nextTypeID)
             -- We have seen this event before, return its typeID and
-            -- do not update the typeMap or the type ID counter
+            -- do not update the typeMap or the type ID counter.
             Just thisTypeID -> (typeMap, thisTypeID, typeID)
       ghcTID = GHC.KernelThreadId $ perfEvent_threadID event
       -- generate the appropriate ghc event

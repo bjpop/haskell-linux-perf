@@ -162,7 +162,7 @@ grabRecPerfArgv cmdline =
    inside ("-RecPerf":rest) acc = outside rest acc
    inside (str:rest) (ins, outs) = inside rest (str:ins, outs)
 
--- Attach "perf record" to the profilee process ID.
+-- Run "perf record" with our options and the profilee command.
 perfProcess :: Options -> FilePath -> [String] -> IO ()
 perfProcess options program pArgs = do
    executeFile "perf" True (command ++ args) Nothing
@@ -171,15 +171,21 @@ perfProcess options program pArgs = do
    args =
      concat [output, frequency, moreTimestamps, mmap, selectedEvents, profilee]
    output = ["-o", options_output options]
+   -- Value 1 means hIgh frequency, needed for tracepoints,
+   -- but too much traffic for counters/
    frequency = ["-c", "1"]
+   -- From linux-perf-users@vger.kernel.org:
+   -- The "--timestamp" option adds the timestamps to the samples
+   -- if it were not otherwise added.
    moreTimestamps = ["--timestamp"]
    profilee = program : pArgs
-   -- If no events were specified on the command line then use the defaults
+   -- If no events were specified on the command line then use the defaults.
    selectedEvents
       | null optionEvents = mkEventFlags defaultEvents
       | otherwise = mkEventFlags optionEvents
       where
       optionEvents = options_events options
+   -- If no mmap pages were specified on the command line, use the defaults.
    selectedMmap
       | null optionMmap = defaultMmap
       | otherwise = optionMmap
@@ -191,8 +197,8 @@ perfProcess options program pArgs = do
 
 -- The default value of the mmap-pages setting.
 -- That's an order of magnitude too little to avoid IO/CPU overload
--- with the current demo setup, but that's the highest permitted value,
--- unless rec-perf is run as root. Can be overwritten by the user.
+-- with typical examples, but that's the highest permitted value,
+-- unless rec-perf is run as root. Can be overridden by the user.
 defaultMmap :: String
 defaultMmap = "128"
 
@@ -213,11 +219,12 @@ defaultEvents =
     "sched:sched_wait_task",
     "sched:sched_process_wait",
     "sched:sched_process_fork",
---    "sched:sched_stat_wait",
---    "sched:sched_stat_sleep",
     "sched:sched_stat_iowait",
---    "sched:sched_stat_runtime",
     "sched:sched_pi_setprio",
+-- These are too frequent, mostly in COMM events, and cause IO/CPU overload:
+--  "sched:sched_stat_wait",
+--  "sched:sched_stat_sleep",
+--  "sched:sched_stat_runtime",
 
     -- system calls to record
     "raw_syscalls:sys_enter",
