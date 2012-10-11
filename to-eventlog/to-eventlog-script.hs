@@ -46,7 +46,8 @@ main = do
             (_, Just hout, _, _) -> do
                -- read the stdout of perf script
                contents <- hGetContents hout
-               -- parse the perf events
+               -- Parse the perf events.
+               -- TODO: should we report that we ignore some mis-formed lines?
                let perfEvents = mapMaybe parsePerfLine $ lines contents
                -- grab the start time of the first event for the command
                -- of interest
@@ -84,31 +85,28 @@ data PerfEvent =
    }
    deriving (Eq, Show)
 
--- XXX this is a bit hacky, more error checking is desirable
 parsePerfLine :: String -> Maybe PerfEvent
 parsePerfLine string
-  | comm:ids:cpu:timeStr:eventStr:rest <- words string
+  | comm:ids:cpu:timeStrColon:eventColon:rest <- words string
   , (pidStr, _:tidStr) <- break (== '/') ids
-  , (topTime, _:botTime) <- break (== '.') timeStr =
-    let event = init eventStr
-        trace = unwords rest
+  , (timeStr, ":")  <- break (== ':') timeStrColon
+  , (topTime, _:botTime) <- break (== '.') timeStr
+  , (event, ":")  <- break (== ':') eventColon = do
+    timeMus <- safeReadInt (topTime ++ botTime)
+    pid <- safeReadInt pidStr
+    tid <- safeReadInt tidStr
+    let trace = unwords rest
         -- Time resolution is 1000 lower than in Haskell eventlogs
         -- and in the raw, binary perf events format,
         -- hence we multiply by 1000.
-        time :: Word64
-        time = 1000 * safeReadInt (topTime ++ init botTime)
-        pid, tid :: Word64
-        pid = safeReadInt pidStr
-        tid = safeReadInt tidStr
-    in Just $ PerfEvent comm tid pid time cpu event trace
+        time = 1000 * timeMus
+    return $ PerfEvent comm tid pid time cpu event trace
 parsePerfLine _ = Nothing
 
--- XXX icky hack to handle bad input
--- FIXME
-safeReadInt :: String -> Word64
+safeReadInt :: String -> Maybe Word64
 safeReadInt string
-   | all isDigit string = read string
-   | otherwise = -1
+   | all isDigit string = Just $ read string
+   | otherwise = Nothing
 
 -- Convert linux perf event data into a ghc eventlog.
 perfToEventlog :: Maybe Word64 -> [PerfEvent] -> GHC.EventLog
