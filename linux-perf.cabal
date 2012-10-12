@@ -29,7 +29,7 @@ Description:
     1. Recording events.
  .
     2. Displaying events.
- . 
+ .
  The @perf record@ command records information about performance events in a file called (by default) @perf.data@.
  It is a binary file format which is basically a memory dump of the data structures used to record event
  information. The file has two main parts:
@@ -93,11 +93,11 @@ Library
 
   -- Packages needed in order to build this package.
   Build-depends: base==4.*,
-                 binary==0.5.*,
+                 binary >= 0.5 && < 0.7,
                  mtl==2.*,
-                 bytestring==0.9.*,
-                 pretty==1.0.*,
-                 containers==0.4.*
+                 bytestring >= 0.9,
+                 pretty >= 1 && < 2,
+                 containers >= 0.4 && < 0.6
 
   include-dirs: Profiling/Linux/Perf
 
@@ -112,25 +112,30 @@ Executable dump-perf {
   hs-source-dirs: dump-perf
   Build-depends: linux-perf==0.2,
                  base==4.*,
-                 bytestring==0.9.*
+                 bytestring >= 0.9
+  ghc-options:   -rtsopts
 }
 
 Executable rec-perf {
   Main-is: rec-perf.hs
   hs-source-dirs: rec-perf
   Build-depends: base==4.*,
-                 unix==2.5.*,
-                 directory==1.1.*,
-                 filepath==1.2.*
-  other-modules: GetTimeOfDay
+                 unix >= 2.5 && < 2.7,
+                 directory >= 1.1 && < 2,
+                 filepath >= 1.2 && < 2
+  ghc-options:   -rtsopts
+  ghc-options:   -Wall -fwarn-orphans -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -fwarn-monomorphism-restriction -fwarn-unrecognised-pragmas
+  ghc-options:   -fno-warn-auto-orphans -fno-warn-implicit-prelude
 }
 
-Executable to-eventlog {
-  Main-is: to-eventlog.hs
+Executable to-eventlog-script {
+  Main-is: to-eventlog-script.hs
   hs-source-dirs: to-eventlog
-  Build-depends: linux-perf==0.2,
-                 base==4.*,
-                 ghc-events==0.4.1.*,
-                 containers==0.4.*,
-                 bytestring==0.9.*
+  Build-depends: base==4.*,
+                 ghc-events==0.4.2.*,
+                 containers >= 0.4 && < 0.6,
+                 process==1.1.*
+  ghc-options:   -rtsopts
+  ghc-options:   -Wall -fwarn-orphans -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -fwarn-monomorphism-restriction -fwarn-unrecognised-pragmas
+  ghc-options:   -fno-warn-auto-orphans -fno-warn-implicit-prelude
 }

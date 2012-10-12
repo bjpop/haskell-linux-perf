@@ -82,15 +82,15 @@ getPID :: GetEvents PID
 getPID = PID `fmap` getU32
 
 -- read a thread ID as a 32 bit word and return TID type
-getTID :: GetEvents TID 
+getTID :: GetEvents TID
 getTID = TID `fmap` getU32
 
 -- read an event ID as a 64 bit word and return EventID type
-getEventID :: GetEvents EventID 
+getEventID :: GetEvents EventID
 getEventID = EventID `fmap` getU64
 
 -- read a timeStamp as a 64 bit word and return TimeStamp type
-getTimeStamp :: GetEvents TimeStamp 
+getTimeStamp :: GetEvents TimeStamp
 getTimeStamp = TimeStamp `fmap` getU64
 
 -- read a byte count as a 64 bit word and return a ByteCount64 type
@@ -381,7 +381,7 @@ parseExitEvent = do
    eventPayload_ppid <- getPID
    eventPayload_tid <- getTID
    eventPayload_ptid <- getTID
-   eventPayload_time <- getTimeStamp 
+   eventPayload_time <- getTimeStamp
    return ExitEvent{..}
 
 -- from <perf source>/util/event.h
@@ -417,7 +417,7 @@ parseThrottleEvent = do
 
 parseUnThrottleEvent :: GetEvents EventPayload
 parseUnThrottleEvent = do
-   eventPayload_time <- getTimeStamp 
+   eventPayload_time <- getTimeStamp
    eventPayload_id <- getEventID
    eventPayload_stream_id <- getU64
    return UnThrottleEvent{..}
@@ -523,7 +523,7 @@ readHeader h = do
    b <- B.hGet h (#size struct perf_file_header)
    runGetEventsCheck parseFileHeader b
 
--- | Read the perf event attributes from the input file handle. 
+-- | Read the perf event attributes from the input file handle.
 readAttributes :: Handle       -- ^ Input file.
                -> FileHeader   -- ^ Perf file header containing the byte offset of the attribute data.
                -> IO [FileAttr]
@@ -547,7 +547,7 @@ readAttributeIDs h attr = do
    ws <- runGetEventsCheck (replicateM (size `div` bytesInWord64) getU64) b
    return $ map EventID ws
 
--- | Read the event type information from the input file handle. 
+-- | Read the event type information from the input file handle.
 readEventTypes :: Handle             -- ^ Input file.
                -> FileHeader         -- ^ Perf file header containing the byte offset of the event type data.
                -> IO [TraceEventType]

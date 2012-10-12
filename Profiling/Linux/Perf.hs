@@ -12,13 +12,13 @@
 --
 -- Below is an example program which reads and parses a perf.data file and then
 -- dumps the contents to standard output:
--- 
+--
 -- @
 --module Main where
--- 
+--
 --import Profiling.Linux.Perf (readAndDisplay, OutputStyle (..))
 --import System.Environment (getArgs)
--- 
+--
 --main :: IO ()
 --main = do
 --  args <- getArgs
@@ -62,7 +62,7 @@ import Data.ByteString.Lazy.Char8 (unpack)
 -- | Associate events with their event types.
 -- Events are (usually) tagged with an "EventID". Many events can share the same
 -- "EventID". Each "EventID" is associated with exactly one event type, which includes
--- the name of the event, an "EventSource" and an "EventTypeID" 
+-- the name of the event, an "EventSource" and an "EventTypeID"
 type TypeMap = Map EventID TypeInfo
 
 -- | Type information for of event.
@@ -83,7 +83,7 @@ sortEventsOnTime =
    -- Compare two events based on their timestamp.
    compareEventTime :: Event -> Event -> Ordering
    compareEventTime e1 e2 =
-      compare (getEventTime $ ev_payload e1) (getEventTime $ ev_payload e2) 
+      compare (getEventTime $ ev_payload e1) (getEventTime $ ev_payload e2)
    -- Get the timestamp of an event if it has one, otherwise
    -- set it to 0 (for the purposes of sorting them).
    getEventTime :: EventPayload -> TimeStamp
@@ -92,7 +92,7 @@ sortEventsOnTime =
    getEventTime e@(ExitEvent {}) = eventPayload_time e
    getEventTime e@(ThrottleEvent {}) = eventPayload_time e
    getEventTime e@(UnThrottleEvent {}) = eventPayload_time e
-   getEventTime other = TimeStamp 0 
+   getEventTime other = TimeStamp 0
 
 -- | Build a map from "EventID"s to their type information.
 makeTypeMap :: PerfData -> TypeMap
@@ -118,15 +118,15 @@ makeTypeMap perfData =
    idsToInfo acc (attr, eventID) =
       case Map.lookup typeID eventTypeToName of
          -- We don't have a type name for this particular event.
-         -- This shouldn't happen in a well formatted perf data file, 
+         -- This shouldn't happen in a well formatted perf data file,
          -- but we prefer to ignore it rather than generate an error.
          Nothing -> acc
          -- Update the event type map, mapping each event id to the name.
          Just typeName ->
-            Map.insert eventID (TypeInfo typeName typeSource typeID) acc 
+            Map.insert eventID (TypeInfo typeName typeSource typeID) acc
       where
-      typeSource = ea_type attr 
-      typeID = ea_config attr   
+      typeSource = ea_type attr
+      typeID = ea_config attr
 
 -- | Style to use for printing the event data.
 data OutputStyle
@@ -159,11 +159,14 @@ readPerfData file = do
    return $ PerfData header attrs idss types events
 
 -- | Render the components of the perf.data file under the specified style.
+-- Don't create a single big @Doc@ or @String@ to avoid stack overflows.
+-- Instead, lazily print events as they are rendered.
 display :: OutputStyle -> PerfData -> IO ()
-display style contents = do
-   putStrLn $ render $ case style of
-      Dump -> dumper contents
-      Trace -> tracer contents
+display style contents =
+  let docs = case style of
+        Dump -> dumper contents
+        Trace -> tracer contents
+  in mapM_ (putStrLn . render) docs
 
 -- | Get the Sample Type and test the sample_id_all bit in the flags field.
 getAttrInfo :: [FileAttr] -> [(SampleTypeBitMap, Bool)]
@@ -191,9 +194,9 @@ readEvents h maxOffset offset sampleType =
            readWorker nextOffset (event:acc)
 
 -- | Dump the events in a sequence, showing all their internal values.
-dumper :: PerfData -> Doc
+dumper :: PerfData -> [Doc]
 dumper (PerfData header attrs idss types events) =
-   vcat $ intersperse separator $
+   intersperse separator $
       [ text "Perf File Header:"
       , pretty header
       , text "Perf File Attributes:"
@@ -211,18 +214,18 @@ dumper (PerfData header attrs idss types events) =
 
 -- | Print a time sorted sequence of comm and sample events. Sample events
 -- show their human-friendly source name.
-tracer :: PerfData -> Doc
+tracer :: PerfData -> [Doc]
 tracer perfData@(PerfData header attrs idss types events) =
-   vcat $ map (prettyPayload typeMap . ev_payload) sortedEvents
+   concatMap (prettyPayload typeMap . ev_payload) sortedEvents
    where
    -- Render a list of docs in comma separated form.
-   csv :: [Doc] -> Doc
-   csv = hcat . intersperse (text ", ") 
+   csv :: [Doc] -> [Doc]
+   csv docs = [hcat $ intersperse (text ", ") docs]
    sortedEvents = sortEventsOnTime events
    typeMap = makeTypeMap perfData
-   prettyPayload :: TypeMap -> EventPayload -> Doc
+   prettyPayload :: TypeMap -> EventPayload -> [Doc]
    prettyPayload _typeMap ev@(CommEvent {}) =
-      csv [ text "PID" <+> (pretty . eventPayload_pid) ev 
+      csv [ text "PID" <+> (pretty . eventPayload_pid) ev
           , text "TID" <+> (pretty . eventPayload_tid) ev
           , text "command" <+> (pretty . eventPayload_CommName) ev ]
    prettyPayload typeMap ev@(SampleEvent {}) =
@@ -240,6 +243,6 @@ tracer perfData@(PerfData header attrs idss types events) =
       sampleDoc
          | Just id <- eventPayload_SampleID ev,
            Just typeInfo <- Map.lookup id typeMap =
-                text "sample" <+> (text . typeInfo_name) typeInfo 
+                text "sample" <+> (text . typeInfo_name) typeInfo
          | otherwise = text "sample <unknown source>"
-   prettyPayload _typeMap other = Pretty.empty
+   prettyPayload _typeMap other = []

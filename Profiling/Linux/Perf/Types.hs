@@ -9,9 +9,9 @@
 --
 -- Types for representing the parsed contents of a @perf.data@ file output
 -- the @perf record@ command on Linux (Linux performance counter information).
--- 
+--
 -- There is an intentional close correspondence between the types in this
--- module and the representation in the C implementation of perf. 
+-- module and the representation in the C implementation of perf.
 --
 -----------------------------------------------------------------------------
 
@@ -132,7 +132,7 @@ instance Pretty Event where
 
 -- XXX should probably get this from the definintion of the C type
 -- | Encoding of the @perf_event_header->type@.
-data EventType 
+data EventType
    = PERF_RECORD_MMAP       -- 1
    | PERF_RECORD_LOST       -- 2
    | PERF_RECORD_COMM       -- 3
@@ -191,7 +191,7 @@ instance Pretty SampleFormat where
    pretty = text . show
 
 -- | A bitfield in @perf_event_header->misc@.
-data EventCPUMode 
+data EventCPUMode
    = PERF_RECORD_CPUMODE_UNKNOWN -- ^ 0
    | PERF_RECORD_MISC_KERNEL     -- ^ 1
    | PERF_RECORD_MISC_USER       -- ^ 2
@@ -256,7 +256,7 @@ data EventAttrFlag
    | Task                  -- ^ trace fork/exit
    | WaterMark             -- ^ wakeup_watermark
 
-   
+
    | ArbitrarySkid         -- ^ precise_ip, See also @PERF_RECORD_MISC_EXACT_IP@
    | ConstantSkid          -- ^ precise_ip, See also @PERF_RECORD_MISC_EXACT_IP@
    | RequestedZeroSkid     -- ^ precise_ip, See also @PERF_RECORD_MISC_EXACT_IP@
@@ -351,16 +351,16 @@ data EventAttr
         ea_size :: ByteCount32,   -- ^ Size of the attr structure, for fwd/bwd compat.
         ea_config :: EventTypeID, -- ^ Link to .event id of perf trace event type.
 
-        
+
         ea_sample_period_or_freq :: Word64, -- ^ Number of events when a sample is generated if .freq
                                             -- is not set or frequency for sampling if .freq is set.
         ea_sample_type :: SampleTypeBitMap, -- ^ Information about what is stored in the sampling record.
-        ea_read_format :: Word64,           -- 
-        ea_flags :: Word64,                 -- 
+        ea_read_format :: Word64,           --
+        ea_flags :: Word64,                 --
         ea_wakeup_events_or_watermark :: Word32, -- ^ Wakeup every n events or bytes before wakeup.
-        ea_bp_type :: Word32,               -- 
-        ea_bp_addr_or_config1 :: Word64,    -- 
-        ea_bp_len_or_config2 :: Word64      -- 
+        ea_bp_type :: Word32,               --
+        ea_bp_addr_or_config1 :: Word64,    --
+        ea_bp_len_or_config2 :: Word64      --
      }
 
 instance Pretty EventAttr where
@@ -425,8 +425,8 @@ data EventPayload =
    }
    -- Corresponds with the @mmap_event@ struct in @\<perf source\>\/util\/event.h@ (without the header).
    | MmapEvent {
-      eventPayload_pid :: PID,                
-      eventPayload_tid :: TID,                
+      eventPayload_pid :: PID,
+      eventPayload_tid :: TID,
       eventPayload_MmapStart :: Word64,       -- ^ start of memory range
       eventPayload_MmapLen :: Word64,         -- ^ size of memory range
       eventPayload_MmapPgoff :: Word64,       -- ^ page offset
@@ -434,19 +434,19 @@ data EventPayload =
    }
    -- ForkEvent corresponds with the @fork_event@ struct in @\<perf source\>\/util\/event.h@ (without the header)
    | ForkEvent {
-      eventPayload_pid :: PID,       
+      eventPayload_pid :: PID,
       eventPayload_ppid :: PID,      -- ^ parent proecess id
-      eventPayload_tid :: TID,       
+      eventPayload_tid :: TID,
       eventPayload_ptid :: TID,      -- ^ parent thread id
       eventPayload_time :: TimeStamp -- ^ timestamp
    }
    -- Corresponds with the @exit_event@ struct in @\<perf source\>\/util\/event.h@ (without the header)
    | ExitEvent {
-      eventPayload_pid :: PID,       
-      eventPayload_ppid :: PID,      
-      eventPayload_tid :: TID,       
-      eventPayload_ptid :: TID,      
-      eventPayload_time :: TimeStamp 
+      eventPayload_pid :: PID,
+      eventPayload_ppid :: PID,
+      eventPayload_tid :: TID,
+      eventPayload_ptid :: TID,
+      eventPayload_time :: TimeStamp
    }
    -- Corresponds with the @lost_event@ struct in @\<perf source\>\/util\/event.h@ (without the header)
    | LostEvent {
@@ -460,7 +460,7 @@ data EventPayload =
       eventPayload_ReadValue :: Word64,
       eventPayload_ReadTimeEnabled :: Word64,
       eventPayload_ReadTimeRunning :: Word64,
-      eventPayload_id :: EventID 
+      eventPayload_id :: EventID
    }
    | SampleEvent {
       eventPayload_SampleIP :: Maybe Word64,       -- ^ Instruction pointer.
@@ -469,7 +469,7 @@ data EventPayload =
       eventPayload_SampleTime :: Maybe TimeStamp,  -- ^ Timestamp.
       eventPayload_SampleAddr :: Maybe Word64,     --
       eventPayload_SampleID :: Maybe EventID,      -- ^ Event ID.
-      eventPayload_SampleStreamID :: Maybe Word64, -- 
+      eventPayload_SampleStreamID :: Maybe Word64, --
       eventPayload_SampleCPU :: Maybe Word32,      -- ^ CPU ID.
       eventPayload_SamplePeriod :: Maybe Word64    -- ^ Duration of sample.
    }
@@ -477,8 +477,8 @@ data EventPayload =
    -- @\<system include directory\>\/linux\/perf_event.h@
    -- but does not appear in @\<perf source\>\/util\/event.h@
    | ThrottleEvent {
-      eventPayload_time :: TimeStamp, 
-      eventPayload_id :: EventID,     
+      eventPayload_time :: TimeStamp,
+      eventPayload_id :: EventID,
       eventPayload_stream_id :: Word64
    }
    | UnThrottleEvent {
