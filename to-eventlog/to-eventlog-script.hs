@@ -33,7 +33,8 @@ import System.Process
 -- difficult due to perf script bugs.
 perfScriptCmd :: String -> String
 perfScriptCmd inFile =
-   "perf script -f comm,tid,pid,time,cpu,event,trace -i " ++ inFile
+-- TODO:  "perf script -f comm,tid,pid,time,cpu,event,trace -i " ++ inFile
+   "perf script -f comm,tid,pid,time,cpu,event -i " ++ inFile
 
 main :: IO ()
 main = do
@@ -95,7 +96,7 @@ parsePerfLine string
     timeMus <- safeReadInt (topTime ++ botTime)
     pid <- safeReadInt pidStr
     tid <- safeReadInt tidStr
-    let trace = unwords rest
+    let trace = "" -- TODO: unwords rest
         -- Time resolution is 1000 lower than in Haskell eventlogs
         -- and in the raw, binary perf events format,
         -- hence we multiply by 1000.
