@@ -13,7 +13,7 @@
 -- For example if the profiled command is called "Fac", and the perf data
 -- is in a file called perf.data, we can generate a ghc log file like so:
 --
---    to-eventlog-script Fac perf.data Fac.perf.eventlog
+--    ghc-events-perf-sync Fac perf.data Fac.perf.eventlog
 --
 -----------------------------------------------------------------------------
 
@@ -60,7 +60,7 @@ main = do
                -- write the ghc eventlog to a file
                GHC.writeEventLogToFile outFile perfEventlog
             _ -> die "Internal error: shell process creation failed"
-      _other -> die "Syntax: to-eventlog-script command [perf_file eventlog_file]"
+      _other -> die "Syntax: ghc-events-perf-sync command [perf_file eventlog_file]"
 
 -- exit the program with an error message
 die :: String -> IO a

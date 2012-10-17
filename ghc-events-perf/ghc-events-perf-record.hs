@@ -14,12 +14,12 @@
 -- of events to be recorded.
 --
 -- Usage:
--- rec-perf [--RTS]
---          [ +RecPerf [rec-perf-args ... ] -RecPerf ]
+-- ghc-events-perf-record [--RTS]
+--          [ +GhcEventsPerf [record-args ... ] -GhcEventsPerf ]
 --          command [command-args ... ]
 --
 -- To get help:
--- rec-perf +RecPerf -h
+-- ghc-events-perf-record +GhcEventsPerf -h
 --
 -- The --RTS is to stop ghc from grabbing any +RTS ... -RTS commands from
 -- the command line.
@@ -40,8 +40,8 @@ import System.FilePath (splitFileName)
 main :: IO ()
 main = do
    argv <- getArgs
-   let (recPerfArgv, profileeArgv) = grabRecPerfArgv argv
-   recPerfOptions <- parseRecPerfOptions recPerfArgv
+   let (recPerfArgv, profileeArgv) = grabGhcEventsPerfArgv argv
+   recPerfOptions <- parseGhcEventsPerfOptions recPerfArgv
    profileCommand recPerfOptions profileeArgv
 
 profileCommand :: Options -> [String] -> IO ()
@@ -76,7 +76,8 @@ checkProfileeCommand profileeCommand = do
             else ioError $ userError ("You do not have permission to execute command: " ++ profileePath)
       else ioError $ userError ("File: " ++ profileePath ++ " does not exist")
 
--- Options for rec-perf itself, some of which are passed on to "perf record"
+-- Options for ghc-events-perf-record, some of which are passed on
+-- to "perf record"
 data Options = Options
    { options_events :: [String]
    , options_mmap :: String
@@ -95,9 +96,9 @@ defaultOptions = Options
 defaultPerfOutputFile :: FilePath
 defaultPerfOutputFile = "perf.data"
 
--- parse the command line arguments that appeared between +RefPerf and -RecPerf
-parseRecPerfOptions :: [String] -> IO Options
-parseRecPerfOptions argv =
+-- parse the command line arguments that appeared between +RefPerf and -GhcEventsPerf
+parseGhcEventsPerfOptions :: [String] -> IO Options
+parseGhcEventsPerfOptions argv =
    case getOpt Permute recOptions argv of
       (foundOptions, _unknowns, _errors@[]) -> do
          let options = foldl (flip id) defaultOptions foundOptions
@@ -111,7 +112,7 @@ usage :: String
 usage = usageInfo header recOptions
 
 header :: String
-header = "Usage: rec-perf [--RTS] [ +RecPerf [rec-perf-args ... ] -RecPerf ] command [command-args ... ]"
+header = "Usage: ghc-events-perf-record [--RTS] [ +GhcEventsPerf [record-args ... ] -GhcEventsPerf ] command [command-args ... ]"
 
 recOptions :: [OptDescr (Options -> Options)]
 recOptions =
@@ -146,20 +147,20 @@ safeReadInt option cs
         error ("The argument for option " ++ option ++
                " should be an integer, but it was " ++ cs)
 
--- Cut out all the arguments between +RecPerf -RecPerf from the command
+-- Cut out all the arguments between +GhcEventsPerf -GhcEventsPerf from the command
 -- line. Return two lists: 1) everything between the markers,
 -- and 2) everything else.
-grabRecPerfArgv :: [String] -> ([String], [String])
-grabRecPerfArgv cmdline =
+grabGhcEventsPerfArgv :: [String] -> ([String], [String])
+grabGhcEventsPerfArgv cmdline =
    (reverse cmdIns, reverse cmdOuts)
    where
    (cmdIns, cmdOuts) = outside cmdline ([], [])
    outside, inside :: [String] -> ([String], [String]) -> ([String], [String])
    outside [] acc = acc
-   outside ("+RecPerf":rest) acc = inside rest acc
+   outside ("+GhcEventsPerf":rest) acc = inside rest acc
    outside (str:rest) (ins, outs) = outside rest (ins, str:outs)
    inside [] acc = acc
-   inside ("-RecPerf":rest) acc = outside rest acc
+   inside ("-GhcEventsPerf":rest) acc = outside rest acc
    inside (str:rest) (ins, outs) = inside rest (str:ins, outs)
 
 -- Run "perf record" with our options and the profilee command.
@@ -198,7 +199,7 @@ perfProcess options program pArgs = do
 -- The default value of the mmap-pages setting.
 -- That's an order of magnitude too little to avoid IO/CPU overload
 -- with typical examples, but that's the highest permitted value,
--- unless rec-perf is run as root. Can be overridden by the user.
+-- unless ghc-events-perf-record is run as root. Can be overridden by the user.
 defaultMmap :: String
 defaultMmap = "128"
 

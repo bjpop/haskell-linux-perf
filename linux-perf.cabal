@@ -116,9 +116,9 @@ Executable dump-perf {
   ghc-options:   -rtsopts
 }
 
-Executable rec-perf {
-  Main-is: rec-perf.hs
-  hs-source-dirs: rec-perf
+Executable ghc-events-perf-record {
+  Main-is: ghc-events-perf-record.hs
+  hs-source-dirs: ghc-events-perf
   Build-depends: base==4.*,
                  unix >= 2.5 && < 2.7,
                  directory >= 1.1 && < 2,
@@ -128,9 +128,9 @@ Executable rec-perf {
   ghc-options:   -fno-warn-auto-orphans -fno-warn-implicit-prelude
 }
 
-Executable to-eventlog-script {
-  Main-is: to-eventlog-script.hs
-  hs-source-dirs: to-eventlog
+Executable ghc-events-perf-sync {
+  Main-is: ghc-events-perf-sync.hs
+  hs-source-dirs: ghc-events-perf
   Build-depends: base==4.*,
                  ghc-events==0.4.2.*,
                  containers >= 0.4 && < 0.6,
