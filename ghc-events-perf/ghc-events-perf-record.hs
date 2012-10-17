@@ -6,17 +6,17 @@
 -- Stability   : experimental
 -- Portability : ghc
 --
--- A program to "perf record" a trace of another command.
+-- A tool to "perf record" a trace of another program.
 --
 -- The linux performance counter tool "perf" can record events
--- for a given command. This program runs "perf" adding our default set
+-- for a given program. This tool runs "perf", adding our default set
 -- of options. In particular, it specifies our default set
 -- of events to be recorded.
 --
 -- Usage:
 -- ghc-events-perf-record [--RTS]
 --          [ +GhcEventsPerf [record-args ... ] -GhcEventsPerf ]
---          command [command-args ... ]
+--          program-name [program-args ... ]
 --
 -- To get help:
 -- ghc-events-perf-record +GhcEventsPerf -h
@@ -38,28 +38,30 @@ import System.Directory
 import System.FilePath (splitFileName)
 
 main :: IO ()
-main = do
-   argv <- getArgs
+main = getArgs >>= command
+
+command :: [String] -> IO ()
+command argv = do
    let (recPerfArgv, profileeArgv) = grabGhcEventsPerfArgv argv
    recPerfOptions <- parseGhcEventsPerfOptions recPerfArgv
    profileCommand recPerfOptions profileeArgv
 
 profileCommand :: Options -> [String] -> IO ()
-profileCommand _options [] = ioError $ userError ("You did not supply a command to profile")
+profileCommand _options [] = ioError $ userError ("You did not supply a name of a program to profile")
 profileCommand options (profileeCommand:profileeArgs) = do
    profileePath <- checkProfileeCommand profileeCommand
-   -- run perf record with the profilee command
+   -- run perf record with the profilee program
    perfProcess options profileePath profileeArgs
 
--- Check if the profilee command exists and is executable.
+-- Check if the profilee program exists and is executable.
 checkProfileeCommand :: FilePath -> IO FilePath
 checkProfileeCommand profileeCommand = do
    let (profileeCommandDir, _profileeCommandFile) = splitFileName profileeCommand
    profileePath <-
       if null profileeCommandDir
-         -- profilee command was not prefixed with a directory path
+         -- profilee program name was not prefixed with a directory path
          then do
-            -- try to look up the command in the PATH environment
+            -- try to look up the program name in the PATH environment
             maybeProfileePath <- findExecutable profileeCommand
             case maybeProfileePath of
                Nothing -> ioError $ userError ("Command: " ++ profileeCommand ++ " not found")
@@ -69,11 +71,11 @@ checkProfileeCommand profileeCommand = do
    exists <- doesFileExist profileePath
    if exists
       then do
-         -- check if we can execute the command
+         -- check if we can execute the program
          perms <- getPermissions profileePath
          if executable perms
             then return profileePath
-            else ioError $ userError ("You do not have permission to execute command: " ++ profileePath)
+            else ioError $ userError ("You do not have permission to execute program: " ++ profileePath)
       else ioError $ userError ("File: " ++ profileePath ++ " does not exist")
 
 -- Options for ghc-events-perf-record, some of which are passed on
@@ -112,7 +114,7 @@ usage :: String
 usage = usageInfo header recOptions
 
 header :: String
-header = "Usage: ghc-events-perf-record [--RTS] [ +GhcEventsPerf [record-args ... ] -GhcEventsPerf ] command [command-args ... ]"
+header = "Usage: ghc-events-perf-record [--RTS] [ +GhcEventsPerf [record-args ... ] -GhcEventsPerf ] program-name [program-args ... ]"
 
 recOptions :: [OptDescr (Options -> Options)]
 recOptions =
@@ -163,12 +165,12 @@ grabGhcEventsPerfArgv cmdline =
    inside ("-GhcEventsPerf":rest) acc = outside rest acc
    inside (str:rest) (ins, outs) = inside rest (str:ins, outs)
 
--- Run "perf record" with our options and the profilee command.
+-- Run "perf record" with our options and the profilee program.
 perfProcess :: Options -> FilePath -> [String] -> IO ()
 perfProcess options program pArgs = do
-   executeFile "perf" True (command ++ args) Nothing
+   executeFile "perf" True (perfCommand ++ args) Nothing
    where
-   command = ["record"]
+   perfCommand = ["record"]
    args =
      concat [output, frequency, moreTimestamps, mmap, selectedEvents, profilee]
    output = ["-o", options_output options]
