@@ -1,8 +1,20 @@
-Sample usage, illustrated with the test data files.
+Crash-course of the ghc-events-perf tool:
+
+ghc --make -eventlog -rtsopts -threaded MyProgram.hs
+
+ghc-events-perf record MyProgram +RTS -N2 -l-g-p
+
+ghc-events-perf convert MyProgram
+
+threadscope MyProgram.total.eventlog
+
+
+A longer example, pointing out some common pitfalls and using
+the test data files ParFib.* from the library's github repository.
 
 The test data files ParFib.perf.data and ParFib.eventlog were obtained with
 
-sudo path-to/rec-perf +RecPerf -o ParFib.perf.data -RecPerf ./ParFib +RTS -N2 -l-g-p
+sudo path-to/ghc-events-perf record +RecPerf -o ParFib.perf.data -RecPerf ./ParFib +RTS -N2 -l-g-p
 
 where ParFib is the Haskell program from
 
@@ -16,21 +28,18 @@ At this point, one can change the owner or permissions of ParFib.perf.data
 and parse and view it with the standard 'perf script' command or with
 the 'dump-perf' tool that uses our Haskell library for parsing perf data.
 
-The perf data can be transformed to a perf eventlog with
+The perf data can be transformed to an eventlog and synchronized
+and merged with the standard eventlog using
 
-to-eventlog-script ParFib ParFib.perf.data ParFib.perf.eventlog
+ghc-events-perf convert ParFib ParFib.total.eventlog ParFib.perf.data ParFib.perf.eventlog
 
-The eventlog can be viewed with
+The resulting big eventlog can be displayed with
 
-ghc-events show ParFib.perf.eventlog | less
+ghc-events show ParFib.total.eventlog | less
 
-the two eventlogs can be merged with
+but it's best viewed in ThreadScope with
 
-ghc-events merge ParFib.all.eventlog ParFib.eventlog ParFib.perf.eventlog
-
-and the resulting big eventlog is best viewed in ThreadScope
-
-threadscope ParFib.all.eventlog
+threadscope ParFib.total.eventlog
 
 in the Timeline main pane, with Instant Events selected in the Traces tab
 and with the View/Event_Labels option on. If no perf events show up
@@ -38,5 +47,6 @@ in the Instant Events traces, your GHC is probably 7.6 or older.
 
 Note: in this version of haskell-linux-perf one can obtain the perf data just
 as well by running 'perf record' or 'perf script record' by hand instead
-of by running 'rec-perf'. In other versions (to be found on different branches)
-'rec-perf' is mandatory.
+of by running 'ghc-events-perf record'. In other versions (to be found
+on different branches) 'ghc-events-perf record' is mandatory,
+since it inserts special synchronizing events.
