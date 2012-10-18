@@ -34,6 +34,6 @@ To clean:
 
 To test:
 
-   dump-perf ParFib.perf.data | less
+   dump-perf test/ParFib.perf.data | less
 
 For longer examples see README.ghc-events-perf.txt.

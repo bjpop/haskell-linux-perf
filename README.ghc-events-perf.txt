@@ -9,20 +9,16 @@ ghc-events-perf convert MyProgram
 threadscope MyProgram.total.eventlog
 
 
-A longer example, pointing out some common pitfalls and using
-the test data files ParFib.* from the library's github repository.
-
-The test data files ParFib.perf.data and ParFib.eventlog were obtained with
-
-sudo path-to/ghc-events-perf record +GhcEventsPerf -o ParFib.perf.data -GhcEventsPerf ./ParFib --RTS +RTS -N2 -la
-
-where ParFib is the Haskell program from
-
-https://github.com/Mikolaj/threadscope-sparkgraph-demo/blob/master/ParFib.hs
-
-compiled with GHC >= 7.8 as follows
+A longer example, pointing out some common pitfalls and using the test
+data files from the test/ directory of the library's github repository.
+The Haskell program test/ParFib.hs is compiled with GHC >= 7.8 as follows
 
 ghc --make -eventlog -rtsopts -threaded ParFib.hs
+
+Test data files corresponding to test/ParFib.perf.data and test/ParFib.eventlog
+can be created with
+
+sudo path-to/ghc-events-perf record +GhcEventsPerf -o ParFib.perf.data -GhcEventsPerf ./ParFib --RTS +RTS -N2 -la
 
 At this point, one can change the owner or permissions of ParFib.perf.data
 and parse and view it with the standard 'perf script' command or with
