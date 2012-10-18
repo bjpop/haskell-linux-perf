@@ -2,7 +2,7 @@ Crash-course of the ghc-events-perf tool:
 
 ghc --make -eventlog -rtsopts -threaded MyProgram.hs
 
-ghc-events-perf record MyProgram +RTS -N2 -l-g-p
+ghc-events-perf record MyProgram --RTS +RTS -N2 -l-g-p
 
 ghc-events-perf convert MyProgram
 
@@ -14,7 +14,7 @@ the test data files ParFib.* from the library's github repository.
 
 The test data files ParFib.perf.data and ParFib.eventlog were obtained with
 
-sudo path-to/ghc-events-perf record +RecPerf -o ParFib.perf.data -RecPerf ./ParFib +RTS -N2 -l-g-p
+sudo path-to/ghc-events-perf record +GhcEventsPerf -o ParFib.perf.data -GhcEventsPerf ./ParFib --RTS +RTS -N2 -la
 
 where ParFib is the Haskell program from
 

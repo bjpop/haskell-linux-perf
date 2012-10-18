@@ -54,10 +54,9 @@ command ["help", "convert"] =
     , "  eventlog-file  path to the GHC RTS eventlog of the Haskell program"
     ]
 
--- TODO: RTS options intended for ghc-events-perf-record are consumed
--- in ghc-events-perf instead. (But profilee options are safely escaped.)
-command ("record" : args) =
-  executeFile "ghc-events-perf-record" True args Nothing
+command ("record" : args) = do
+  let recordArgs = "--RTS" : args
+  executeFile "ghc-events-perf-record" True recordArgs Nothing
 
 command ["convert", program_name, out_file, perf_file, eventlog_file] = do
   let sync_eventlog_file = program_name ++ ".perf.eventlog"
