@@ -28,6 +28,8 @@ module Main where
 import System.Posix.Process
 import System.Environment
 import System.Exit
+import System.FilePath
+import System.Process
 import System.IO (hPutStrLn, stderr)
 import Control.Monad
 
@@ -55,8 +57,14 @@ command ["help", "convert"] =
     ]
 
 command ("record" : args) = do
-  let recordArgs = "--RTS" : args
-  executeFile "ghc-events-perf-record" True recordArgs Nothing
+  myPath <- getExecutablePath
+  let commonPath = fst $ splitFileName myPath
+      -- We assume ghc-events-perf-record is in the same directory
+      -- as ghc-events-perf. Needed for 'sudo', because root needn't
+      -- have user's ~/.cabal/bin in his PATH.
+      recordPath = combine commonPath "ghc-events-perf-record"
+      recordArgs = "--RTS" : args
+  executeFile recordPath True recordArgs Nothing
 
 command ["convert", program_name, out_file, perf_file, eventlog_file] = do
   let sync_eventlog_file = program_name ++ ".perf.eventlog"
@@ -64,12 +72,16 @@ command ["convert", program_name, out_file, perf_file, eventlog_file] = do
                  , perf_file
                  , sync_eventlog_file
                  ]
-  void $ executeFile "ghc-events-perf-sync" True syncArgs Nothing
+  putStrLn "Translating and synchronizing..."
+  syncHandle <- runProcess "ghc-events-perf-sync" syncArgs
+                           Nothing Nothing Nothing Nothing Nothing
+  void $ waitForProcess syncHandle
   let mergeArgs = [ "merge"
                   , out_file
-                  , sync_eventlog_file
                   , eventlog_file
+                  , sync_eventlog_file
                   ]
+  putStrLn "Merging with the standard eventlog..."
   executeFile "ghc-events" True mergeArgs Nothing
 
 command ["convert", program_name] = do

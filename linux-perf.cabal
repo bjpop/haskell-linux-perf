@@ -144,6 +144,8 @@ Executable ghc-events-perf {
   Main-is: ghc-events-perf.hs
   hs-source-dirs: ghc-events-perf
   Build-depends: base==4.*,
+                 filepath >= 1.2 && < 2,
+                 process==1.1.*,
                  unix >= 2.5 && < 2.7
   ghc-options:   -Wall -fwarn-orphans -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -fwarn-monomorphism-restriction -fwarn-unrecognised-pragmas
   ghc-options:   -fno-warn-auto-orphans -fno-warn-implicit-prelude

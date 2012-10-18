@@ -58,7 +58,7 @@ main = do
                -- convert the perf events into a GHC eventlog
                    perfEventlog = perfToEventlog startTime perfEvents
                -- debug: print the start time
-               print startTime
+               putStrLn $ "starting perf-time: " ++ show startTime
                -- write the ghc eventlog to a file
                GHC.writeEventLogToFile outFile perfEventlog
             _ -> die "Internal error: shell process creation failed"

@@ -31,7 +31,7 @@ the 'dump-perf' tool that uses our Haskell library for parsing perf data.
 The perf data can be transformed to an eventlog and synchronized
 and merged with the standard eventlog using
 
-ghc-events-perf convert ParFib ParFib.total.eventlog ParFib.perf.data ParFib.perf.eventlog
+ghc-events-perf convert ParFib ParFib.total.eventlog ParFib.perf.data ParFib.eventlog
 
 The resulting big eventlog can be displayed with
 
