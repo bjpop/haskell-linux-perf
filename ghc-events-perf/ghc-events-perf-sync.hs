@@ -8,12 +8,12 @@
 -- Portability : ghc
 --
 -- Convert linux perf data into a GHC eventlog, using the output from
--- perf script. You need to specify the name of the command that was
+-- perf script. You need to specify the name of the program that was
 -- profiled as the first argument.
--- For example if the profiled command is called "Fac", and the perf data
+-- For example if the profiled program is called "Fac", and the perf data
 -- is in a file called perf.data, we can generate a ghc log file like so:
 --
---    to-eventlog-script Fac perf.data Fac.perf.eventlog
+--    ghc-events-perf-sync Fac perf.data Fac.perf.eventlog
 --
 -----------------------------------------------------------------------------
 
@@ -40,7 +40,9 @@ main :: IO ()
 main = do
    args <- getArgs
    case args of
-      [command, inFile, outFile] -> do
+      ["-h"] ->
+        putStrLn usage
+      [program, inFile, outFile] -> do
          procOut <- createProcess (shell $ perfScriptCmd inFile)
                        { std_out = CreatePipe }
          case procOut of
@@ -50,33 +52,37 @@ main = do
                -- Parse the perf events.
                -- TODO: should we report that we ignore some mis-formed lines?
                let perfEvents = mapMaybe parsePerfLine $ lines contents
-               -- grab the start time of the first event for the command
+               -- grab the start time of the first event for the program
                -- of interest
-                   startTime = getStartTime command perfEvents
+                   startTime = getStartTime program perfEvents
                -- convert the perf events into a GHC eventlog
                    perfEventlog = perfToEventlog startTime perfEvents
                -- debug: print the start time
-               print startTime
+               putStrLn $ "starting perf-time: " ++ show startTime
                -- write the ghc eventlog to a file
                GHC.writeEventLogToFile outFile perfEventlog
             _ -> die "Internal error: shell process creation failed"
-      _other -> die "Syntax: to-eventlog-script command [perf_file eventlog_file]"
+      _other -> die usage
+
+usage :: String
+usage =
+  "Usage: ghc-events-perf-sync program-name perf-file out-eventlog-file"
 
 -- exit the program with an error message
 die :: String -> IO a
 die s = hPutStrLn stderr s >> exitWith (ExitFailure 1)
 
 getStartTime :: String -> [PerfEvent] -> Maybe Word64
-getStartTime _command [] = Nothing
-getStartTime  command (event:rest)
-   | command == thisCommand = Just $ perfEvent_time event
-   | otherwise = getStartTime command rest
+getStartTime _program [] = Nothing
+getStartTime  program (event:rest)
+   | program == thisCommand = Just $ perfEvent_time event
+   | otherwise = getStartTime program rest
    where
-   thisCommand = perfEvent_command event
+   thisCommand = perfEvent_program event
 
 data PerfEvent =
    PerfEvent
-   { perfEvent_command :: !String
+   { perfEvent_program :: !String
    , perfEvent_threadID :: !Word64
    , _perfEvent_processID :: !Word64
    , perfEvent_time :: !Word64
@@ -88,7 +94,7 @@ data PerfEvent =
 
 parsePerfLine :: String -> Maybe PerfEvent
 parsePerfLine string
-  | comm:ids:cpu:timeStrColon:eventColon:rest <- words string
+  | comm:ids:cpu:timeStrColon:eventColon:_rest <- words string
   , (pidStr, _:tidStr) <- break (== '/') ids
   , (timeStr, ":")  <- break (== ':') timeStrColon
   , (topTime, _:botTime) <- break (== '.') timeStr

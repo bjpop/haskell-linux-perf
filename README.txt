@@ -8,7 +8,7 @@ License and Copyright
 linux-perf is distributed as open source software under the terms of the BSD
 License (see the file LICENSE in the top directory).
 
-Authors: Simon Marlow, Bernie Pope, Mikolaj Konarski, copyright 2010, 2011, 2012.
+Authors: Simon Marlow, Bernie Pope, Mikolaj Konarski, Duncan Coutts, copyright 2010, 2011, 2012.
 
 Contact information
 -------------------
@@ -31,3 +31,9 @@ To build and install:
 To clean:
 
    cabal clean
+
+To test:
+
+   dump-perf ParFib.perf.data | less
+
+For longer examples see README.ghc-events-perf.txt.
