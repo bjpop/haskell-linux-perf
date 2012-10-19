@@ -181,7 +181,13 @@ perfProcess options program pArgs = do
    -- The "--timestamp" option adds the timestamps to the samples
    -- if it were not otherwise added.
    moreTimestamps = ["--timestamp"]
-   profilee = program : pArgs
+   -- profilee = "/home/bjpop/.cabal/bin/sleep_run" : (program : pArgs)
+   profilee = "sleep_run" : (program : pArgs)
+{-
+     "--" : "/bin/bash" : "-c" :
+     [perlHack ++ ";" ++ unwords (program : pArgs)]
+   perlHack = "perl -MTime::HiRes -e 'Time::HiRes::nanosleep 3'"
+-}
    -- If no events were specified on the command line then use the defaults.
    selectedEvents
       | null optionEvents = mkEventFlags defaultEvents

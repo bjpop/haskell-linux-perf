@@ -66,10 +66,10 @@ command ("record" : args) = do
       recordArgs = "--RTS" : args
   executeFile recordPath True recordArgs Nothing
 
+-- TODO: program_name is not needed any more
 command ["convert", program_name, out_file, perf_file, eventlog_file] = do
   let sync_eventlog_file = program_name ++ ".perf.eventlog"
-      syncArgs = [ program_name
-                 , perf_file
+      syncArgs = [ perf_file
                  , sync_eventlog_file
                  ]
   putStrLn "Translating and synchronizing..."

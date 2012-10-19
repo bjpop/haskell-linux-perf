@@ -41,8 +41,17 @@ in the Timeline main pane, with Instant Events selected in the Traces tab
 and with the View/Event_Labels option on. If no perf events show up
 in the Instant Events traces, your GHC is probably 7.6 or older.
 
-Note: in this version of haskell-linux-perf one can obtain the perf data just
-as well by running 'perf record' or 'perf script record' by hand instead
-of by running 'ghc-events-perf record'. In other versions (to be found
-on different branches) 'ghc-events-perf record' is mandatory,
-since it inserts special synchronizing events.
+Note: in this version of haskell-linux-perf we can only obtain
+the perf data by running 'ghc-events-perf record'. Neither 'perf record'
+nor 'perf script record' suffice, because we need to insert
+special synchronizing events into the perf data.
+
+Note: this version of the code uses the linux-perf library to parse
+the perf data file and an artificially inserted nanosleep syscall
+to synchronize perf events and the standard eventlog events.
+This approach has its benefits and drawbacks compared to the usage
+of perf-script for both tasks. Which of the approaches proves better depends
+on the evolution of the perf toolset (we are waiting for a patchset
+that makes perf clock trustworthy and externally meaningful) and on the
+future needs of Haskell users of perf events. For now, we retain
+this version on a branch.

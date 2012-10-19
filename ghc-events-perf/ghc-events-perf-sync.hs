@@ -1,4 +1,4 @@
-{-# LANGUAGE PatternGuards, BangPatterns #-}
+{-# LANGUAGE RecordWildCards, PatternGuards, NamedFieldPuns #-}
 -----------------------------------------------------------------------------
 -- |
 -- Copyright   : (c) 2010,2011,2012 Simon Marlow, Bernie Pope, Mikolaj Konarski
@@ -7,169 +7,143 @@
 -- Stability   : experimental
 -- Portability : ghc
 --
--- Convert linux perf data into a GHC eventlog, using the output from
--- perf script. You need to specify the name of the program that was
--- profiled as the first argument.
--- For example if the profiled program is called "Fac", and the perf data
--- is in a file called perf.data, we can generate a ghc log file like so:
---
---    ghc-events-perf-sync Fac perf.data Fac.perf.eventlog
+-- Convert linux perf data into a GHC event log.
 --
 -----------------------------------------------------------------------------
 
 import qualified GHC.RTS.Events as GHC
-import Data.Map as Map hiding (mapMaybe, map, filter, null)
-import Data.List as List (foldl')
-import Data.Word (Word64, Word32)
-import Data.Maybe (fromMaybe, mapMaybe)
+import Profiling.Linux.Perf as Perf
+   ( readPerfData, makeTypeMap, sortEventsOnTime, TypeMap, TypeInfo (..) )
+import Profiling.Linux.Perf.Types as Perf
+   ( TID (..), EventSource (..), EventPayload (..), Event (..), EventID
+   , EventTypeID (..), TraceEventType (..) , FileAttr (..), EventAttr (..)
+   , TimeStamp (..), PerfData (..) )
+import Control.Monad (when, guard)
 import System.Exit (exitWith, ExitCode (ExitFailure))
+import System.IO (hPutStrLn, stderr)
 import System.Environment (getArgs)
-import System.IO (hPutStrLn, stderr, hGetContents)
+import Data.Word (Word64, Word32, Word16)
+import Data.Map (toList)
+import Data.Set as Set (fromList, Set, member, empty, insert, toList)
+import Data.Maybe (mapMaybe, fromMaybe)
 import Data.Char (isDigit)
-import System.Process
-
--- Select specific fields for perf script to display.
--- TODO: also specify different fields for software counters. This is
--- difficult due to perf script bugs.
-perfScriptCmd :: String -> String
-perfScriptCmd inFile =
--- TODO:  "perf script -f comm,tid,pid,time,cpu,event,trace -i " ++ inFile
-   "perf script -f comm,tid,pid,time,cpu,event -i " ++ inFile
+import Data.Map as Map hiding (mapMaybe, map, filter, null)
+import Data.List as List (sortBy, foldl', find)
 
 main :: IO ()
 main = do
-   args <- getArgs
-   case args of
-      ["-h"] ->
-        putStrLn usage
-      [program, inFile, outFile] -> do
-         procOut <- createProcess (shell $ perfScriptCmd inFile)
-                       { std_out = CreatePipe }
-         case procOut of
-            (_, Just hout, _, _) -> do
-               -- read the stdout of perf script
-               contents <- hGetContents hout
-               -- Parse the perf events.
-               -- TODO: should we report that we ignore some mis-formed lines?
-               let perfEvents = mapMaybe parsePerfLine $ lines contents
-               -- grab the start time of the first event for the program
-               -- of interest
-                   startTime = getStartTime program perfEvents
-               -- convert the perf events into a GHC eventlog
-                   perfEventlog = perfToEventlog startTime perfEvents
-               -- debug: print the start time
-               putStrLn $ "starting perf-time: " ++ show startTime
-               -- write the ghc eventlog to a file
-               GHC.writeEventLogToFile outFile perfEventlog
-            _ -> die "Internal error: shell process creation failed"
-      _other -> die usage
+  -- read and parse the command line arguments
+  args <- getArgs
+  case args of
+    ["-h"] ->
+      putStrLn usage
+    [inFile, outFile] -> do
+      -- read the linux perf data file
+      perfFileContents <- readPerfData inFile
+      -- convert the perf data to ghc events
+      let startT = getStartTimestamp perfFileContents
+          perfEventlog = perfToEventlog startT perfFileContents
+      -- debug: print the start time
+      putStrLn $ "starting perf-time: " ++ show startT
+      -- write the ghc events out to file
+      GHC.writeEventLogToFile outFile perfEventlog
+    _ -> die usage
 
 usage :: String
 usage =
-  "Usage: ghc-events-perf-sync program-name perf-file out-eventlog-file"
+  "Usage: ghc-events-perf-sync perf-file out-eventlog-file"
 
 -- exit the program with an error message
 die :: String -> IO a
 die s = hPutStrLn stderr s >> exitWith (ExitFailure 1)
 
-getStartTime :: String -> [PerfEvent] -> Maybe Word64
-getStartTime _program [] = Nothing
-getStartTime  program (event:rest)
-   | program == thisCommand = Just $ perfEvent_time event
-   | otherwise = getStartTime program rest
+-- Gets the timestamp of the first occurence of a perf sample event
+-- with markerEventId.
+getStartTimestamp :: PerfData -> Maybe Word64
+getStartTimestamp (PerfData header attrs idss types events) =
+  let isMarkerFileAttr (FileAttr {fa_attr = EventAttr {ea_config}}, _) =
+        ea_config == markerEventId
+      eids :: [EventID]
+      eids = concat $ map snd $ filter isMarkerFileAttr $ zip attrs idss
+      -- Sort the events by timestamp order to get the first occurence.
+      sortedEventPayloads :: [EventPayload]
+      sortedEventPayloads = map ev_payload $ sortEventsOnTime events
+      isMarkerPayload SampleEvent{eventPayload_SampleID = Just si} =
+        si `elem` eids
+      isMarkerPayload _ = False
+  in do
+    marker <- find isMarkerPayload sortedEventPayloads
+    stamp <- eventPayload_SampleTime marker
+    return $ timeStamp stamp
+
+--   id of the sys_exit_nanosleep syscall
+-- TODO: hardcoded for now, take it from the header instead
+markerEventId :: EventTypeID
+markerEventId = EventTypeID 273
+
+-- Convert linux perf event data into a ghc event log.
+perfToEventlog :: Maybe Word64 -> PerfData -> GHC.EventLog
+perfToEventlog mstart perfData =
+   eventLog $ perfToGHC mstart (makeTypeMap perfData) sortedEventPayloads
    where
-   thisCommand = perfEvent_program event
-
-data PerfEvent =
-   PerfEvent
-   { perfEvent_program :: !String
-   , perfEvent_threadID :: !Word64
-   , _perfEvent_processID :: !Word64
-   , perfEvent_time :: !Word64
-   , _perfEvent_CPU :: !String
-   , perfEvent_event :: !String
-   , _perfEvent_trace :: !String
-   }
-   deriving (Eq, Show)
-
-parsePerfLine :: String -> Maybe PerfEvent
-parsePerfLine string
-  | comm:ids:cpu:timeStrColon:eventColon:_rest <- words string
-  , (pidStr, _:tidStr) <- break (== '/') ids
-  , (timeStr, ":")  <- break (== ':') timeStrColon
-  , (topTime, _:botTime) <- break (== '.') timeStr
-  , (event, ":")  <- break (== ':') eventColon = do
-    timeMus <- safeReadInt (topTime ++ botTime)
-    pid <- safeReadInt pidStr
-    tid <- safeReadInt tidStr
-    let trace = "" -- TODO: unwords rest
-        -- Time resolution is 1000 lower than in Haskell eventlogs
-        -- and in the raw, binary perf events format,
-        -- hence we multiply by 1000.
-        time = 1000 * timeMus
-    return $ PerfEvent comm tid pid time cpu event trace
-parsePerfLine _ = Nothing
-
-safeReadInt :: String -> Maybe Word64
-safeReadInt string
-   | all isDigit string = Just $ read string
-   | otherwise = Nothing
-
--- Convert linux perf event data into a ghc eventlog.
-perfToEventlog :: Maybe Word64 -> [PerfEvent] -> GHC.EventLog
-perfToEventlog mstart events =
-   eventLog $ perfToGHC mstart events
-   where
+   -- sort the events by timestamp order
+   sortedEventPayloads :: [EventPayload]
+   sortedEventPayloads =
+      map ev_payload $ sortEventsOnTime $ perfData_events perfData
    eventLog :: [GHC.Event] -> GHC.EventLog
-   eventLog evs = GHC.EventLog (GHC.Header perfEventlogHeader)
-                               (GHC.Data evs)
+   eventLog events = GHC.EventLog (GHC.Header perfEventlogHeader)
+                                  (GHC.Data events)
 
-type TypeMap = Map String Word32
-type EventState = (TypeMap, [GHC.Event], Word32)
+type TypeNameAndID = (String, Word32 {- PerfEventTypeNum -} )
+type TypeSet = Set TypeNameAndID
+type EventState = (TypeSet, [GHC.Event])
 
 perfToGHC :: Maybe Word64   -- initial timestamp
-          -> [PerfEvent]    -- perf events in sorted time order
-          -> [GHC.Event]    -- ghc eventlog
-perfToGHC mstart perfEvents =
+          -> TypeMap        -- mapping from event ID to event type info
+          -> [EventPayload] -- perf events in sorted time order
+          -> [GHC.Event]    -- ghc event log
+perfToGHC mstart typeMap perfEvents =
    typeEvents ++ reverse ghcEvents
    where
    start = fromMaybe 0 mstart
    typeEvents :: [GHC.Event]
-   typeEvents = mkTypeEvents $ Map.toList fullTypeMap
+   typeEvents = mkTypeEvents $ Set.toList typeEventSet
    -- we fold over the list of perf events and collect a set of
    -- event types and a list of ghc events
-   (fullTypeMap, ghcEvents, _typeID) = List.foldl' perfToGHCWorker (Map.empty, [], 0) perfEvents
+   (typeEventSet, ghcEvents) = List.foldl' perfToGHCWorker (Set.empty, []) perfEvents
    -- convert the set of perf type infos into a list of events
-   mkTypeEvents :: [(String, Word32)] -> [GHC.Event]
-   mkTypeEvents = map (\(name, ident) -> GHC.Event 0 $ GHC.PerfName ident name)
-
-   -- Extract a new type event and ghc event from the next perf event
-   -- and update the state.
-   -- Note: we need (some of) these bangs to avoid stack overflows.
+   mkTypeEvents :: [TypeNameAndID] -> [GHC.Event]
+   mkTypeEvents = map (\(name, id) -> GHC.Event 0 $ GHC.PerfName id name)
+   -- extract a new type event and ghc event from the next perf event
+   -- and update the state
+   -- TODO: do we need any bangs here to avoid any stack overflows?
    -- XXX a state monad would be nicer
-   perfToGHCWorker :: EventState -> PerfEvent -> EventState
-   perfToGHCWorker state@(!typeMap, !events, !typeID) !event
-      -- only consider events after the program start time
-      | eventTime >= start = (newTypeMap, newEvent:events, newTypeID)
-      | otherwise = state
-      where
-      eventTime = perfEvent_time event
-      relativeTime = eventTime - start
-      eventName = perfEvent_event event
-      (newTypeMap, ghcTypeID, newTypeID) =
-         case Map.lookup eventName typeMap of
-            -- We've not seen this event name before, allocate
-            -- a new event ID for it and insert it into the type map.
-            Nothing -> let nextTypeID  = typeID + 1
-                           nextTypeMap = Map.insert eventName nextTypeID typeMap
-                       in (nextTypeMap, nextTypeID, nextTypeID)
-            -- We have seen this event before, return its typeID and
-            -- do not update the typeMap or the type ID counter.
-            Just thisTypeID -> (typeMap, thisTypeID, typeID)
-      ghcTID = GHC.KernelThreadId $ perfEvent_threadID event
-      -- generate the appropriate ghc event
-      newEvent = GHC.Event relativeTime newEventBody
-      newEventBody = GHC.PerfTracepoint ghcTypeID ghcTID
+   perfToGHCWorker :: EventState -> EventPayload -> EventState
+   perfToGHCWorker state@(typeSet, events) SampleEvent{..} =
+      fromMaybe state $ do
+         eventTID <- eventPayload_SampleTID
+         eventID <- eventPayload_SampleID
+         absoluteTime <- fmap timeStamp eventPayload_SampleTime
+         guard $ absoluteTime > start
+         let relativeTime = absoluteTime - start
+         -- lookup the event type for this event
+         TypeInfo typeName typeSource typeID <- Map.lookup eventID typeMap
+         let newTypeSet = Set.insert (typeName, ghcTypeID) typeSet
+             ghcTID = GHC.KernelThreadId $ fromIntegral $ tid eventTID
+             ghcTypeID = fromIntegral $ eventTypeID typeID
+             -- generate the appropriate ghc event
+             newEvent = GHC.Event relativeTime newEventBody
+             newEventBody
+                -- it is a tracepoint
+                | typeSource == PerfTypeTracePoint =
+                    GHC.PerfTracepoint ghcTypeID ghcTID
+                -- it is some kind of counter
+                | otherwise =
+                    let eventPeriod = fromMaybe 0 eventPayload_SamplePeriod
+                    in GHC.PerfCounter ghcTypeID ghcTID eventPeriod
+         seq newTypeSet $ return (newTypeSet, newEvent:events)
+   -- skip any other type of event which is not a SampleEvent
+   perfToGHCWorker eventState _otherEvent = eventState
 
 perfEventlogHeader :: [GHC.EventType]
 perfEventlogHeader =
