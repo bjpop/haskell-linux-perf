@@ -46,12 +46,24 @@ the perf data by running 'ghc-events-perf record'. Neither 'perf record'
 nor 'perf script record' suffice, because we need to insert
 special synchronizing events into the perf data.
 
-Note: this version of the code uses the linux-perf library to parse
-the perf data file and an artificially inserted nanosleep syscall
-to synchronize perf events and the standard eventlog events.
-This approach has its benefits and drawbacks compared to the usage
-of perf-script for both tasks. Which of the approaches proves better depends
-on the evolution of the perf toolset (we are waiting for a patchset
-that makes perf clock trustworthy and externally meaningful) and on the
-future needs of Haskell users of perf events. For now, we retain
+Note: this version of the code controls the execution of the Haskell
+program to be profiled and of the perf-record tool by launching them,
+passing around a PID and waiting for termination or terminating,
+as appropriate. If needed, this can be extended to temporarily suspending
+the Haskell program, e.g., to make a synchronizing syscall more often
+than just at the start of execution.
+
+Apart of that, the code uses the linux-perf library to parse the perf
+data file and the nanosleep syscall to synchronize perf events
+with the standard eventlog. (See the start of the ghc-events-perf-record.hs
+file for more details.) This approach has its benefits and drawbacks
+compared to the usage of perf-script and to starting the Haskell program
+by the perf-record tool. Which of the approaches proves better depends
+on the evolution of the perf toolset  (we are waiting for a patchset
+that makes perf clock trustworthy and externally meaningful, as well as
+for a patch that fixes the '-p' option). It also depends on the future needs
+of Haskell users of perf events. In particular, the '-p' option seems
+to produce much more perf events, even though in its present state it ignores
+all tasks spawned after the Haskell program is started. Whether the extra
+events are useful requires further investigation. For now, we retain
 this version on a branch.
