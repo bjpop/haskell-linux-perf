@@ -8,8 +8,8 @@
 --
 -- A tool to "perf record" a trace of another program.
 --
--- The linux performance counter tool "perf" can record events
--- for a given program. This tool runs "perf", adding our default set
+-- The linux performance counter tool "perf" can record events for a given
+-- Haskell program (profilee). This tool runs "perf", adding our default set
 -- of options. In particular, it specifies our default set
 -- of events to be recorded.
 --
@@ -44,21 +44,21 @@ command :: [String] -> IO ()
 command argv = do
    let (recPerfArgv, profileeArgv) = grabGhcEventsPerfArgv argv
    recPerfOptions <- parseGhcEventsPerfOptions recPerfArgv
-   profileCommand recPerfOptions profileeArgv
+   profile recPerfOptions profileeArgv
 
-profileCommand :: Options -> [String] -> IO ()
-profileCommand _options [] = ioError $ userError ("You did not supply a name of a program to profile")
-profileCommand options (profileeCommand:profileeArgs) = do
-   profileePath <- checkProfileeCommand profileeCommand
-   -- run perf record with the profilee program
+profile :: Options -> [String] -> IO ()
+profile _options [] = ioError $ userError ("You did not supply a name of a program to profile")
+profile options (profileeCommand:profileeArgs) = do
+   profileePath <- checkProfilee profileeCommand
+   -- run perf record with the profilee command
    perfProcess options profileePath profileeArgs
 
 -- Check if the profilee program exists and is executable.
-checkProfileeCommand :: FilePath -> IO FilePath
-checkProfileeCommand profileeCommand = do
-   let (profileeCommandDir, _profileeCommandFile) = splitFileName profileeCommand
+checkProfilee :: FilePath -> IO FilePath
+checkProfilee profileeCommand = do
+   let (profileeDir, _profileeFile) = splitFileName profileeCommand
    profileePath <-
-      if null profileeCommandDir
+      if null profileeDir
          -- profilee program name was not prefixed with a directory path
          then do
             -- try to look up the program name in the PATH environment
@@ -71,7 +71,7 @@ checkProfileeCommand profileeCommand = do
    exists <- doesFileExist profileePath
    if exists
       then do
-         -- check if we can execute the program
+         -- check if we can execute the profilee program
          perms <- getPermissions profileePath
          if executable perms
             then return profileePath
@@ -167,7 +167,7 @@ grabGhcEventsPerfArgv cmdline =
 
 -- Run "perf record" with our options and the profilee program.
 perfProcess :: Options -> FilePath -> [String] -> IO ()
-perfProcess options program pArgs = do
+perfProcess options profileeProgram profileeArgs = do
    executeFile "perf" True (perfCommand ++ args) Nothing
    where
    perfCommand = ["record"]
@@ -181,7 +181,7 @@ perfProcess options program pArgs = do
    -- The "--timestamp" option adds the timestamps to the samples
    -- if it were not otherwise added.
    moreTimestamps = ["--timestamp"]
-   profilee = program : pArgs
+   profilee = profileeProgram : profileeArgs
    -- If no events were specified on the command line then use the defaults.
    selectedEvents
       | null optionEvents = mkEventFlags defaultEvents

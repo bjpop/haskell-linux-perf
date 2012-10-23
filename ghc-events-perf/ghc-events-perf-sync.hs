@@ -8,9 +8,9 @@
 -- Portability : ghc
 --
 -- Convert linux perf data into a GHC eventlog, using the output from
--- perf script. You need to specify the name of the program that was
--- profiled as the first argument.
--- For example if the profiled program is called "Fac", and the perf data
+-- perf script. You need to specify the name of profilee --- the profiled
+-- Haskell program --- as the first argument.
+-- For example if the profilee is called "Fac", and the perf data
 -- is in a file called perf.data, we can generate a ghc log file like so:
 --
 --    ghc-events-perf-sync Fac perf.data Fac.perf.eventlog
@@ -42,7 +42,7 @@ main = do
    case args of
       ["-h"] ->
         putStrLn usage
-      [program, inFile, outFile] -> do
+      [profilee, inFile, outFile] -> do
          procOut <- createProcess (shell $ perfScriptCmd inFile)
                        { std_out = CreatePipe }
          case procOut of
@@ -52,9 +52,8 @@ main = do
                -- Parse the perf events.
                -- TODO: should we report that we ignore some mis-formed lines?
                let perfEvents = mapMaybe parsePerfLine $ lines contents
-               -- grab the start time of the first event for the program
-               -- of interest
-                   startTime = getStartTime program perfEvents
+               -- grab the start time of the first event for profilee
+                   startTime = getStartTime profilee perfEvents
                -- convert the perf events into a GHC eventlog
                    perfEventlog = perfToEventlog startTime perfEvents
                -- debug: print the start time
@@ -73,12 +72,10 @@ die :: String -> IO a
 die s = hPutStrLn stderr s >> exitWith (ExitFailure 1)
 
 getStartTime :: String -> [PerfEvent] -> Maybe Word64
-getStartTime _program [] = Nothing
-getStartTime  program (event:rest)
-   | program == thisCommand = Just $ perfEvent_time event
-   | otherwise = getStartTime program rest
-   where
-   thisCommand = perfEvent_program event
+getStartTime _profilee [] = Nothing
+getStartTime  profilee (event:rest)
+   | profilee == perfEvent_program event = Just $ perfEvent_time event
+   | otherwise = getStartTime profilee rest
 
 data PerfEvent =
    PerfEvent
@@ -149,7 +146,7 @@ perfToGHC mstart perfEvents =
    -- XXX a state monad would be nicer
    perfToGHCWorker :: EventState -> PerfEvent -> EventState
    perfToGHCWorker state@(!typeMap, !events, !typeID) !event
-      -- only consider events after the program start time
+      -- only consider events after the profilee start time
       | eventTime >= start = (newTypeMap, newEvent:events, newTypeID)
       | otherwise = state
       where
