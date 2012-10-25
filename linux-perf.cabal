@@ -168,3 +168,10 @@ Executable ghc-events-perf {
   ghc-options:   -Wall -fwarn-orphans -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -fwarn-monomorphism-restriction -fwarn-unrecognised-pragmas
   ghc-options:   -fno-warn-auto-orphans -fno-warn-implicit-prelude
 }
+
+Executable count-events {
+  Main-is: count-events.hs
+  hs-source-dirs: test
+  Build-depends: linux-perf==0.2,
+                 base==4.*
+}
