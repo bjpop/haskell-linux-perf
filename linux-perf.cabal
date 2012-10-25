@@ -11,35 +11,47 @@ category:            Development, GHC, Debug, Profiling, Trace
 Build-type:          Simple
 Cabal-version:       >=1.8
 Description:
- This library is for reading and parsing the data file output of the Linux @perf@ command.
+ This library is for reading and parsing the data file output
+ of the Linux @perf@ command.
  The @perf@ command provides performance profiling information for
  applications running under the Linux operating system. This information
  includes hardware performance counters and kernel tracepoints.
  .
- Modern CPUs can provide information about the runtime behaviour of software through so-called hardware
- performance counters <http://en.wikipedia.org/wiki/Hardware_performance_counter>. Recent versions of
- the Linux kernel (since 2.6.31) provide a generic interface to low-level events for running processes.
- This includes access to hardware counters but also a wide array of software events such as page faults,
- scheduling activity and system calls. A userspace tool called 'perf' is built on top of the kernel interface,
- which provides a convenient way to record and view events for running processes.
+ Modern CPUs can provide information about the runtime behaviour
+ of software through so-called hardware performance counters
+ <http://en.wikipedia.org/wiki/Hardware_performance_counter>.
+ Recent versions of
+ the Linux kernel (since 2.6.31) provide a generic interface
+ to low-level events for running processes.
+ This includes access to hardware counters but also a wide array
+ of software events such as page faults,
+ scheduling activity and system calls. A userspace tool called 'perf'
+ is built on top of the kernel interface,
+ which provides a convenient way to record and view events
+ for running processes.
  .
- The @perf@ tool has many sub-commands which do a variety of things, but in general it has two main
- purposes:
+ The @perf@ tool has many sub-commands which do a variety of things,
+ but in general it has two main purposes:
  .
     1. Recording events.
  .
     2. Displaying events.
  .
- The @perf record@ command records information about performance events in a file called (by default) @perf.data@.
- It is a binary file format which is basically a memory dump of the data structures used to record event
- information. The file has two main parts:
+ The @perf record@ command records information about performance
+ events in a file called (by default) @perf.data@.
+ It is a binary file format which is basically a memory dump
+ of the data structures used to record event information.
+ The file has two main parts:
  .
-    1. A header which describes the layout of information in the file (section sizes etcetera) and common information
-       about events in the second part of the file (an encoding of event types and their names).
+    1. A header which describes the layout of information
+       in the file (section sizes etcetera) and common information
+       about events in the second part of the file (an encoding
+       of event types and their names).
  .
     2. The payload of the file which is a sequence of event records.
  .
- Each event field has a header which says what general type of event it is plus information about the size of its body.
+ Each event field has a header which says what general type of event it is
+ plus information about the size of its body.
  .
  There are nine types of event:
  .
@@ -47,7 +59,8 @@ Description:
  .
     2. @PERF_RECORD_LOST@: an unknown event.
  .
-    3. @PERF_RECORD_COMM@: maps a command name string to a process and thread ID.
+    3. @PERF_RECORD_COMM@: maps a command name string to a process
+       and thread ID.
  .
     4. @PERF_RECORD_EXIT@: process exit.
  .
@@ -59,15 +72,20 @@ Description:
  .
     8. @PERF_RECORD_READ@:
  .
-    9. @PERF_RECORD_SAMPLE@: a sample of an actual hardware counter or a software event.
+    9. @PERF_RECORD_SAMPLE@: a sample of an actual hardware counter
+       or a software event.
  .
- The @PERF_RECORD_SAMPLE@ events (samples) are the most interesting ones in terms of program profiling. The other events
- seem to be mostly useful for keeping track of process technicalities. Samples are timestamped with an unsigned 64 bit
- word, which records elapsed nanoseconds since some point in time (system running
- time, based on the kernel scheduler clock). Samples have themselves a type which is defined
+ The @PERF_RECORD_SAMPLE@ events (samples) are the most interesting
+ ones in terms of program profiling. The other events
+ seem to be mostly useful for keeping track of process technicalities.
+ Samples are timestamped with an unsigned 64 bit
+ word, which records elapsed nanoseconds since some point in time
+ (system running time, based on the kernel scheduler clock).
+ Samples have themselves a type which is defined
  in the file header and linked to the sample by an integer identifier.
  .
- Below is an example program which reads a @perf.data@ file and prints out the number of events that it contains.
+ Below is an example program which reads a @perf.data@ file and prints out
+ the number of events that it contains.
  .
       >module Main where
       >

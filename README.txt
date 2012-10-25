@@ -20,9 +20,10 @@ Email Bernie Pope:
 Building and installing
 -----------------------
 
-linux-perf uses the cabal infrastructure for configuring, building and installation.
-It needs access to the header files from the linux kernel source distribution (one
-that is sufficiently recent to support the performance counters tool).
+linux-perf uses the cabal infrastructure for configuring, building
+and installation. It needs access to the header files from the linux
+kernel source distribution (one that is sufficiently recent to support
+the performance counters tool).
 
 To build and install:
 
