@@ -41,8 +41,9 @@ in the Timeline main pane, with Instant Events selected in the Traces tab
 and with the View/Event_Labels option on. If no perf events show up
 in the Instant Events traces, your GHC is probably 7.6 or older.
 
-Note: in this version of haskell-linux-perf one can obtain the perf data just
-as well by running 'perf record' or 'perf script record' by hand instead
-of by running 'ghc-events-perf record'. In other versions (to be found
-on different branches) 'ghc-events-perf record' is mandatory,
-since it inserts special synchronizing events.
+Note: in this version of haskell-linux-perf one can obtain the perf data
+just as well by running 'perf record' or 'perf script record' by hand
+instead of by running 'ghc-events-perf record'. In other versions
+(to be found on the sync-by-syscall and control-execution branches)
+'ghc-events-perf record' is mandatory, since it inserts special
+synchronizing events.

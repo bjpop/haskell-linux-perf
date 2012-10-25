@@ -492,7 +492,6 @@ parseEvent sampleType = do
 -- -----------------------------------------------------------------------------
 
 -- | Read an "EventHeader" from the input file handle.
--- readEventHeader :: Handle -> Word64 -> IO EventHeader
 readEventHeader :: Handle        -- ^ Input file.
                 -> ByteCount64   -- ^ Byte offset from the start of the file to the start of the event header.
                 -> IO EventHeader

@@ -8,12 +8,12 @@
 -- Portability : ghc
 --
 -- Convert linux perf data into a GHC eventlog, using the output from
--- perf script. You need to specify the name of profilee --- the profiled
+-- @perf script@. You need to specify the name of profilee --- the profiled
 -- Haskell program --- as the first argument.
--- For example if the profilee is called "Fac", and the perf data
--- is in a file called perf.data, we can generate a ghc log file like so:
+-- For example if the profilee is called @Fac@, and the perf data
+-- is in a file called @perf.data@, we can generate a ghc log file like so:
 --
---    ghc-events-perf-sync Fac perf.data Fac.perf.eventlog
+-- >   ghc-events-perf-sync Fac perf.data Fac.perf.eventlog
 --
 -----------------------------------------------------------------------------
 
@@ -30,14 +30,15 @@ import System.IO (hPutStrLn, stderr, hGetContents)
 import Data.Char (isDigit)
 import System.Process
 
--- Select specific fields for perf script to display.
 -- TODO: also specify different fields for software counters. This is
 -- difficult due to perf script bugs.
+-- | Select specific fields for perf script to display.
 perfScriptCmd :: String -> String
 perfScriptCmd inFile =
--- TODO:  "perf script -f comm,tid,pid,time,cpu,event,trace -i " ++ inFile
+   -- TODO:  "perf script -f comm,tid,pid,time,cpu,event,trace -i " ++ inFile
    "perf script -f comm,tid,pid,time,cpu,event -i " ++ inFile
 
+-- | Process arguments and calculate the result.
 main :: IO ()
 main = do
    args <- getArgs
@@ -69,16 +70,18 @@ usage :: String
 usage =
   "Usage: ghc-events-perf-sync program-name perf-file out-eventlog-file"
 
--- exit the program with an error message
+-- | Exit the program with an error message.
 die :: String -> IO a
 die s = hPutStrLn stderr s >> exitWith (ExitFailure 1)
 
+-- | Deduce the start time of the Haskell program from its perf events.
 getStartTime :: String -> [PerfEvent] -> Maybe Word64
 getStartTime _profilee [] = Nothing
 getStartTime  profilee (event:rest)
    | profilee == perfEvent_program event = Just $ perfEvent_time event
    | otherwise = getStartTime profilee rest
 
+-- | Haskell representation of a single perf event.
 data PerfEvent =
    PerfEvent
    { perfEvent_program :: !String
@@ -91,6 +94,7 @@ data PerfEvent =
    }
    deriving (Eq, Show)
 
+-- | Parse a line of @perf script@ output.
 parsePerfLine :: String -> Maybe PerfEvent
 parsePerfLine string
   | comm:ids:cpu:timeStrColon:eventColon:_rest <- words string
@@ -114,7 +118,7 @@ safeReadInt string
    | all isDigit string = Just $ read string
    | otherwise = Nothing
 
--- Convert linux perf event data into a ghc eventlog.
+-- | Convert linux perf event data into a ghc eventlog.
 perfToEventlog :: Maybe Word64 -> [PerfEvent] -> GHC.EventLog
 perfToEventlog mstart events =
    eventLog $ perfToGHC mstart events
@@ -126,6 +130,7 @@ perfToEventlog mstart events =
 type TypeMap = Map String Word32
 type EventState = (TypeMap, [GHC.Event], Word32)
 
+-- | Convert linux perf events into ghc events.
 perfToGHC :: Maybe Word64   -- initial timestamp
           -> [PerfEvent]    -- perf events in sorted time order
           -> [GHC.Event]    -- ghc eventlog
@@ -170,6 +175,7 @@ perfToGHC mstart perfEvents =
       newEvent = GHC.Event relativeTime newEventBody
       newEventBody = GHC.PerfTracepoint ghcTypeID ghcTID
 
+-- | The header of the ghc eventlog to be created.
 perfEventlogHeader :: [GHC.EventType]
 perfEventlogHeader =
   [ GHC.EventType GHC.nEVENT_PERF_NAME "perf event name" Nothing

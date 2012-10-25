@@ -6,20 +6,22 @@
 -- Stability   : experimental
 -- Portability : ghc
 --
--- A tool to "perf record" a trace of another program.
+-- A tool to @perf record@ a trace of another program.
 --
--- The linux performance counter tool "perf" can record events for a given
--- Haskell program (profilee). This tool runs "perf", adding our default set
+-- The linux performance counter tool @perf@ can record events for a given
+-- Haskell program (profilee). This tool runs @perf@, adding our default set
 -- of options. In particular, it specifies our default set
 -- of events to be recorded.
 --
 -- Usage:
--- ghc-events-perf-record [--RTS]
---          [ +GhcEventsPerf [record-args ... ] -GhcEventsPerf ]
---          program-name [program-args ... ]
 --
--- To get help:
--- ghc-events-perf-record +GhcEventsPerf -h
+-- > ghc-events-perf-record [--RTS]
+-- >     [ +GhcEventsPerf [record-args ... ] -GhcEventsPerf ]
+-- >     program-name [program-args ... ]
+--
+-- Getting help:
+--
+-- > ghc-events-perf-record +GhcEventsPerf -h
 --
 -- The --RTS is to stop ghc from grabbing any +RTS ... -RTS commands from
 -- the command line.
@@ -37,6 +39,7 @@ import System.Directory
    (findExecutable, getPermissions, executable, doesFileExist)
 import System.FilePath (splitFileName)
 
+-- | Process arguments and run the main machinery.
 main :: IO ()
 main = getArgs >>= command
 
@@ -46,6 +49,7 @@ command argv = do
    recPerfOptions <- parseGhcEventsPerfOptions recPerfArgv
    profile recPerfOptions profileeArgv
 
+-- | Profile the given program with the given options.
 profile :: Options -> [String] -> IO ()
 profile _options [] = ioError $ userError ("You did not supply a name of a program to profile")
 profile options (profileeCommand:profileeArgs) = do
@@ -53,7 +57,7 @@ profile options (profileeCommand:profileeArgs) = do
    -- run perf record with the profilee command
    perfProcess options profileePath profileeArgs
 
--- Check if the profilee program exists and is executable.
+-- | Check if the profilee program exists and is executable.
 checkProfilee :: FilePath -> IO FilePath
 checkProfilee profileeCommand = do
    let (profileeDir, _profileeFile) = splitFileName profileeCommand
@@ -78,8 +82,8 @@ checkProfilee profileeCommand = do
             else ioError $ userError ("You do not have permission to execute program: " ++ profileePath)
       else ioError $ userError ("File: " ++ profileePath ++ " does not exist")
 
--- Options for ghc-events-perf-record, some of which are passed on
--- to "perf record"
+-- | Options for @ghc-events-perf-record@, some of which are passed on
+-- to @perf record@.
 data Options = Options
    { options_events :: [String]
    , options_mmap :: String
@@ -98,7 +102,8 @@ defaultOptions = Options
 defaultPerfOutputFile :: FilePath
 defaultPerfOutputFile = "perf.data"
 
--- parse the command line arguments that appeared between +RefPerf and -GhcEventsPerf
+-- | Parse the command line arguments that appeared between
+-- +GhcEventsPerf and -GhcEventsPerf.
 parseGhcEventsPerfOptions :: [String] -> IO Options
 parseGhcEventsPerfOptions argv =
    case getOpt Permute recOptions argv of
@@ -140,7 +145,7 @@ recOptions =
            "Defaults to " ++ defaultMmap ++ ".")
       ]
 
--- Check that a string can be safely intepreted as an integer,
+-- | Check that a string can be safely intepreted as an integer,
 -- otherwise fail with an error message.
 safeReadInt :: String -> String -> Int
 safeReadInt option cs
@@ -149,7 +154,7 @@ safeReadInt option cs
         error ("The argument for option " ++ option ++
                " should be an integer, but it was " ++ cs)
 
--- Cut out all the arguments between +GhcEventsPerf -GhcEventsPerf from the command
+-- | Cut out all the arguments between +GhcEventsPerf -GhcEventsPerf from the command
 -- line. Return two lists: 1) everything between the markers,
 -- and 2) everything else.
 grabGhcEventsPerfArgv :: [String] -> ([String], [String])
@@ -165,7 +170,7 @@ grabGhcEventsPerfArgv cmdline =
    inside ("-GhcEventsPerf":rest) acc = outside rest acc
    inside (str:rest) (ins, outs) = inside rest (str:ins, outs)
 
--- Run "perf record" with our options and the profilee program.
+-- | Run @perf record@ with our options and the profilee program.
 perfProcess :: Options -> FilePath -> [String] -> IO ()
 perfProcess options profileeProgram profileeArgs = do
    executeFile "perf" True (perfCommand ++ args) Nothing
@@ -198,14 +203,15 @@ perfProcess options profileeProgram profileeArgs = do
    mkEventFlags :: [String] -> [String]
    mkEventFlags = alternate (repeat "-e")
 
--- The default value of the mmap-pages setting.
+-- | The default value of the mmap-pages setting.
 -- That's an order of magnitude too little to avoid IO/CPU overload
 -- with typical examples, but that's the highest permitted value,
--- unless ghc-events-perf-record is run as root. Can be overridden by the user.
+-- unless @ghc-events-perf-record@ is run as root.
+-- Can be overridden by the user.
 defaultMmap :: String
 defaultMmap = "128"
 
--- Record these events by default unless the user specifies alternatives.
+-- | Record these events by default unless the user specifies alternatives.
 defaultEvents :: [String]
 defaultEvents =
    [

@@ -6,17 +6,17 @@
 -- Stability   : experimental
 -- Portability : ghc
 --
--- A program to parse and then pretty print the contents of "perf.data" to
--- stdout. "perf.data" is the the output of the "perf record" command on
+-- A program to parse and then pretty print the contents of @perf.data@ to
+-- stdout. @perf.data@ is the the output of the @perf record@ command on
 -- linux (linux performance counter information).
 --
 -- The main use of this program is to demonstrate how to use the
--- Profilinf.Linux.Perf library.
+-- 'Profilinf.Linux.Perf' library.
 --
 -- Usage: dump-perf [--dump] [file]
 --
--- If filename is missing then it will assume the input is "perf.data" in
--- the current working directory.
+-- If filename is missing then it will assume the input is @perf.data@
+-- in the current working directory.
 --
 -----------------------------------------------------------------------------
 

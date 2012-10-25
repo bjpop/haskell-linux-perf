@@ -11,16 +11,18 @@
 --
 -- The ghc-events-perf tool has a couple of commands
 -- for obtaining 'perf' performance data for a Haskell program,
--- translating it to the ghc-events format, sycnronising and merging
+-- translating it to the ghc-events format, synchronizing and merging
 -- with the standard ghc-events eventlog for the Haskell program,
 -- and so making the data ready for display in Threadscope.
 --
 -- Usage:
--- ghc-events-perf command command-args
 --
--- To get help:
--- ghc-events-perf help
--- ghc-events-perf help command
+-- > ghc-events-perf command command-args
+--
+-- Getting help:
+--
+-- > ghc-events-perf help
+-- > ghc-events-perf help command
 -----------------------------------------------------------------------------
 
 module Main where

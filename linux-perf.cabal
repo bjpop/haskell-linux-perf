@@ -44,7 +44,7 @@ Description:
  The file has two main parts:
  .
     1. A header which describes the layout of information
-       in the file (section sizes etcetera) and common information
+       in the file (section sizes, etcetera) and common information
        about events in the second part of the file (an encoding
        of event types and their names).
  .
