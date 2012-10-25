@@ -20,6 +20,8 @@
 --
 -----------------------------------------------------------------------------
 
+module Main where
+
 import Profiling.Linux.Perf (OutputStyle (..), readAndDisplay)
 import System.Exit (exitWith, ExitCode (ExitFailure))
 import System.IO (hPutStrLn, stderr)

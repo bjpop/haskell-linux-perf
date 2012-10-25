@@ -17,6 +17,8 @@
 --
 -----------------------------------------------------------------------------
 
+module Main where
+
 import qualified GHC.RTS.Events as GHC
 import Data.Map as Map hiding (mapMaybe, map, filter, null)
 import Data.List as List (foldl')
