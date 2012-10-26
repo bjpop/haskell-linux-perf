@@ -1,6 +1,7 @@
-linux-perf, a parser for the perf.data file produced by the
-"perf" tool for linux performance counters.
------------------------------------------------------------
+linux-perf, a library for parsing, representing in Haskell
+and pretty printing the data file output of the Linux 'perf'
+command (Linux performance counters).
+------------------------------------------------------------
 
 License and Copyright
 ---------------------
@@ -21,7 +22,7 @@ Building and installing
 -----------------------
 
 linux-perf uses the cabal infrastructure for configuring, building
-and installation. It needs access to the header files from the linux
+and installation. It needs access to the header files from the Linux
 kernel source distribution (one that is sufficiently recent to support
 the performance counters tool).
 

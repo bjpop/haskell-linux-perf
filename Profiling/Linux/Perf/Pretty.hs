@@ -14,7 +14,7 @@ module Profiling.Linux.Perf.Pretty
    ( Pretty (..)
    , prettyString
    , showBits
-   )where
+   ) where
 
 import Data.Word (Word64, Word32, Word16, Word8, Word)
 import Data.Char (chr)
@@ -60,7 +60,7 @@ instance Pretty ByteString where
 bits :: Bits a => a -> [Bool]
 bits x = map (testBit x) [0 .. bitSize x - 1]
 
--- | Render an instance of "Bits" as a "String". 
+-- | Render an instance of "Bits" as a "String".
 showBits :: Bits a => a -> String
 showBits = map toBit . bits
    where

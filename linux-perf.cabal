@@ -11,8 +11,8 @@ category:            Development, GHC, Debug, Profiling, Trace
 Build-type:          Simple
 Cabal-version:       >=1.8
 Description:
- This library is for reading and parsing the data file output
- of the Linux @perf@ command.
+ This library is for parsing, representing in Haskell and pretty printing
+ the data file output of the Linux @perf@ command.
  The @perf@ command provides performance profiling information for
  applications running under the Linux operating system. This information
  includes hardware performance counters and kernel tracepoints.

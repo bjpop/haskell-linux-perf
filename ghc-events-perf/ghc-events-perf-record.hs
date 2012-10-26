@@ -8,7 +8,7 @@
 --
 -- A tool to @perf record@ a trace of another program.
 --
--- The linux performance counter tool @perf@ can record events for a given
+-- The Linux performance counter tool @perf@ can record events for a given
 -- Haskell program (profilee). This tool runs @perf@, adding our default set
 -- of options. In particular, it specifies our default set
 -- of events to be recorded.

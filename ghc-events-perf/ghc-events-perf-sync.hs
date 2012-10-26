@@ -7,7 +7,7 @@
 -- Stability   : experimental
 -- Portability : ghc
 --
--- Convert linux perf data into a GHC eventlog, using the output from
+-- Convert Linux perf data into a GHC eventlog, using the output from
 -- @perf script@. You need to specify the name of profilee --- the profiled
 -- Haskell program --- as the first argument.
 -- For example if the profilee is called @Fac@, and the perf data
@@ -118,7 +118,7 @@ safeReadInt string
    | all isDigit string = Just $ read string
    | otherwise = Nothing
 
--- | Convert linux perf event data into a ghc eventlog.
+-- | Convert Linux perf event data into a ghc eventlog.
 perfToEventlog :: Maybe Word64 -> [PerfEvent] -> GHC.EventLog
 perfToEventlog mstart events =
    eventLog $ perfToGHC mstart events
@@ -130,7 +130,7 @@ perfToEventlog mstart events =
 type TypeMap = Map String Word32
 type EventState = (TypeMap, [GHC.Event], Word32)
 
--- | Convert linux perf events into ghc events.
+-- | Convert Linux perf events into ghc events.
 perfToGHC :: Maybe Word64   -- initial timestamp
           -> [PerfEvent]    -- perf events in sorted time order
           -> [GHC.Event]    -- ghc eventlog

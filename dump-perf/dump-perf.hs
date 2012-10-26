@@ -7,8 +7,8 @@
 -- Portability : ghc
 --
 -- A program to parse and then pretty print the contents of @perf.data@ to
--- stdout. @perf.data@ is the the output of the @perf record@ command on
--- linux (linux performance counter information).
+-- stdout. @perf.data@ is the output of the @perf record@ command on
+-- Linux (Linux performance counter information).
 --
 -- The main use of this program is to demonstrate how to use the
 -- 'Profilinf.Linux.Perf' library.

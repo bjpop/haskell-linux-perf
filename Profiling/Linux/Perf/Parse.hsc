@@ -9,8 +9,8 @@
 -- Portability : ghc
 --
 -- A library to parse and pretty print the contents of @perf.data@ file,
--- the the output of the @perf record@ command on
--- linux (linux performance counter information).
+-- the output of the @perf record@ command on
+-- Linux (Linux performance counter information).
 --
 -----------------------------------------------------------------------------
 
