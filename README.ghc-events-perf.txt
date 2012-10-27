@@ -46,4 +46,6 @@ just as well by running 'perf record' or 'perf script record' by hand
 instead of by running 'ghc-events-perf record'. In other versions
 (to be found on the sync-by-syscall and control-execution branches)
 'ghc-events-perf record' is mandatory, since it inserts special
-synchronizing events.
+synchronizing events. See the findings recorded in from_linux-perf-users.txt
+for some background related to our current design decisions
+and shedding light on possible future directions.
