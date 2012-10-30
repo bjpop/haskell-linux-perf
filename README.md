@@ -1,7 +1,9 @@
-linux-perf, a library for parsing, representing in Haskell
-and pretty printing the data file output of the Linux 'perf'
+linux-perf
+==========
+
+linux-perf is a library for parsing, representing in Haskell
+and pretty-printing the data file output of the Linux 'perf'
 command (Linux performance counters).
-------------------------------------------------------------
 
 License and Copyright
 ---------------------
@@ -16,7 +18,7 @@ Contact information
 
 Email Bernie Pope:
 
-   florbitous <at> gmail <dot> com
+    florbitous_at_gmail_dot_com
 
 Building and installing
 -----------------------
@@ -28,14 +30,14 @@ the performance counters tool).
 
 To build and install:
 
-   cabal install --extra-include-dirs=/path/to/linux/headers/
+    cabal install --extra-include-dirs=/path/to/linux/headers/
 
 To clean:
 
-   cabal clean
+    cabal clean
 
 To test:
 
-   dump-perf test/ParFib.perf.data | less
+    dump-perf test/ParFib.perf.data | less
 
-For longer examples see README.ghc-events-perf.txt.
+For longer examples see README.ghc-events-perf.md.
