@@ -92,7 +92,7 @@ command ["convert", program_name] = do
       eventlog_file = program_name ++ ".eventlog"
   command ["convert", program_name, out_file, perf_file, eventlog_file]
 
-command _ = putStrLn usage >> die "Unrecognized command"
+command _ = putStrLn usage >> Main.die "Unrecognized command"
 
 usage :: String
 usage = "Usage: ghc-events-perf command command-args\n\nThe available commands are: record convert help.\n\nSee 'ghc-events-perf help command' for more information on a specific command."

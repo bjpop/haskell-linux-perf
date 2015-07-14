@@ -119,7 +119,7 @@ Library
 
   -- Packages needed in order to build this package.
   Build-depends: base==4.*,
-                 binary >= 0.5 && < 0.7,
+                 binary >= 0.5 && < 0.8,
                  mtl==2.*,
                  bytestring >= 0.9,
                  pretty >= 1 && < 2,
@@ -149,7 +149,7 @@ Executable ghc-events-perf-record {
   Main-is: ghc-events-perf-record.hs
   hs-source-dirs: ghc-events-perf
   Build-depends: base==4.*,
-                 unix >= 2.5 && < 2.7,
+                 unix >= 2.5 && < 2.8,
                  directory >= 1.1 && < 2,
                  filepath >= 1.2 && < 2
   default-language: Haskell2010
@@ -164,7 +164,7 @@ Executable ghc-events-perf-sync {
   Build-depends: base==4.*,
                  ghc-events >= 0.4.2,
                  containers >= 0.4 && < 0.6,
-                 process==1.1.*
+                 process >= 1.1.0.0
   default-language: Haskell2010
   ghc-options:   -rtsopts
   ghc-options:   -Wall -fwarn-orphans -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -fwarn-monomorphism-restriction -fwarn-unrecognised-pragmas
@@ -176,8 +176,8 @@ Executable ghc-events-perf {
   hs-source-dirs: ghc-events-perf
   Build-depends: base==4.*,
                  filepath >= 1.2 && < 2,
-                 process==1.1.*,
-                 unix >= 2.5 && < 2.7
+                 process >= 1.1.0.0,
+                 unix >= 2.5 && < 2.8
   default-language: Haskell2010
   ghc-options:   -Wall -fwarn-orphans -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -fwarn-monomorphism-restriction -fwarn-unrecognised-pragmas
   ghc-options:   -fno-warn-auto-orphans -fno-warn-implicit-prelude
